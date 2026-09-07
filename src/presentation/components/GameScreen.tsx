@@ -1,0 +1,292 @@
+"use client";
+
+import { useEffect, useRef } from "react";
+import type { GameMode } from "@/domain/GameMode";
+import type { Playlist } from "@/domain/entities/Playlist";
+import { nextLyricHint } from "@/domain/rules/LyricLadder";
+import { useLyrics } from "@/presentation/hooks/useLyrics";
+import { useMusedleGame } from "@/presentation/hooks/useMusedleGame";
+import { useSnippetPlayer } from "@/presentation/hooks/useSnippetPlayer";
+import { AttemptList } from "./AttemptList";
+import { GuessInput } from "./GuessInput";
+import { LyricsDeck } from "./LyricsDeck";
+import { PlayerDeck } from "./PlayerDeck";
+import { WAVE_BAR_COUNT } from "./WaveformScrubber";
+import { RoundResult } from "./RoundResult";
+
+interface GameScreenProps {
+  readonly playlist: Playlist;
+  readonly mode: GameMode;
+  onChangePlaylist(): void;
+}
+
+/**
+ * How many songs to try before giving up on lyrics mode for a playlist.
+ *
+ * LRCLIB does not have everything, so the odd track has to be skipped over
+ * silently. A bound stops that becoming an endless shuffle through a playlist
+ * whose songs it has never heard of.
+ */
+const MAX_LYRIC_SKIPS = 8;
+
+/** Close enough to the limit that another press means "from the top". */
+const END_TOLERANCE_MS = 60;
+
+export function GameScreen({ playlist, mode, onChangePlaylist }: GameScreenProps) {
+  const game = useMusedleGame(playlist);
+  const isLyrics = mode === "lyrics";
+  const lyrics = useLyrics(game.answer, isLyrics);
+  /*
+   * Passing null in lyrics mode keeps the audio engine entirely idle: no
+   * buffering, no decode, and - the bug this fixes - nothing that can be told
+   * to play. A lyrics round should never make a sound.
+   */
+  const player = useSnippetPlayer(isLyrics ? null : game.answer, {
+    buckets: WAVE_BAR_COUNT,
+    spanMs: game.ladder.maxDurationMs,
+  });
+
+  // How much *extra* audio a skip would buy, which is what the button promises.
+  const nextUnlockSeconds = game.ladder.isFinalAttempt(game.state.attempts.length)
+    ? null
+    : (game.ladder.durationAtMs(game.state.attempts.length + 1) - game.unlockedMs) / 1000;
+
+  /*
+   * A song with no words cannot be a lyrics round, so quietly move to the next
+   * one. This runs before the player has done anything, so nothing is lost -
+   * and NEXT_ROUND leaves the stats alone, so a skipped song is not a played
+   * round either.
+   */
+  const lyricSkips = useRef(0);
+  const { nextRound } = game;
+  useEffect(() => {
+    if (!isLyrics || lyrics.status !== "missing") return;
+    if (lyricSkips.current >= MAX_LYRIC_SKIPS) return;
+    lyricSkips.current += 1;
+    nextRound();
+  }, [isLyrics, lyrics.status, nextRound]);
+
+  // A fresh playlist deserves a fresh budget of attempts.
+  useEffect(() => {
+    lyricSkips.current = 0;
+  }, [playlist.id]);
+
+  const handleSkip = (): void => {
+    /*
+     * The ladder value is read before dispatching, because the reducer has not
+     * run yet at this point. `durationAtMs` clamps, so this is also correct on
+     * the final skip, where the round ends and the whole song opens up.
+     */
+    const nextUnlockedMs = game.ladder.durationAtMs(game.state.attempts.length + 1);
+    game.skip();
+
+    // In lyrics mode a skip buys a hint, not a clip - touching the player here
+    // was what started the answer playing quietly in the background.
+    if (isLyrics) return;
+
+    if (player.isPlaying) {
+      // Mid-listen, a skip should buy more audio, not snatch away the clip you
+      // are in the middle of. The engine just moves its own finish line.
+      player.extendTo(nextUnlockedMs);
+    } else {
+      // Standing still, a skip means "let me hear the longer clue", from the top.
+      player.play(0, nextUnlockedMs);
+    }
+  };
+
+  const handlePlay = (): void => {
+    // Resume from the playhead, unless it is already sitting at the limit - in
+    // which case the only sensible reading of "play" is from the top.
+    const atLimit = player.positionMs >= game.unlockedMs - END_TOLERANCE_MS;
+    player.play(atLimit ? 0 : player.positionMs, game.unlockedMs);
+  };
+
+  const handleNextRound = (): void => {
+    player.stop();
+    game.nextRound();
+  };
+
+  return (
+    <div
+      // Drives the accent colour for everything inside: a Spotify game is
+      // green, a YouTube game red, a pasted list cyan.
+      data-source={playlist.provider}
+      className="theme-transition flex w-full max-w-2xl flex-col gap-5"
+    >
+      <PlaylistHeader
+        playlist={playlist}
+        stats={game.stats}
+        onChangePlaylist={onChangePlaylist}
+      />
+
+      {/*
+        Guesses above, deck below. The two controls a player alternates between -
+        press the record, then type - end up adjacent, and the attempt rows read
+        as the history they are rather than as something still to fill in.
+      */}
+      <AttemptList
+        attempts={game.state.attempts}
+        maxAttempts={game.ladder.maxAttempts}
+        isLive={!game.isOver}
+      />
+
+      {isLyrics ? (
+        <LyricsDeck
+          answer={game.answer}
+          lyrics={lyrics}
+          attemptIndex={game.state.attempts.length}
+          isOver={game.isOver}
+        />
+      ) : (
+        <PlayerDeck
+          ladder={game.ladder}
+          unlockedMs={game.unlockedMs}
+          positionMs={player.positionMs}
+          state={player.state}
+          isPlaying={player.isPlaying}
+          resetKey={game.answer.id}
+          peaks={player.peaks}
+          onPlay={handlePlay}
+          onStop={player.stop}
+          onSeek={player.seek}
+        />
+      )}
+
+      {game.isOver ? (
+        <RoundResult
+          state={game.state}
+          answer={game.answer}
+          shareText={game.shareText}
+          onNextRound={handleNextRound}
+        />
+      ) : (
+        <GuessInput
+          tracks={playlist.tracks}
+          disabled={isLyrics && lyrics.status !== "ready"}
+          guessedIds={game.state.attempts.flatMap((attempt) =>
+            attempt.kind === "guess" ? [attempt.trackId] : [],
+          )}
+          nextHint={
+            isLyrics
+              ? nextLyricHint(game.state.attempts.length)
+              : nextUnlockSeconds === null
+                ? null
+                : `+${nextUnlockSeconds}s`
+          }
+          onGuess={game.guess}
+          onSkip={handleSkip}
+        />
+      )}
+
+      {/*
+        Host for the YouTube IFrame player. Playlists imported from Spotify
+        never reach it - they carry their own audio - but a YouTube-sourced
+        playlist needs a real player element in the document to drive.
+      */}
+      <div
+        ref={player.containerRef}
+        aria-hidden
+        // A real 200x200 box parked offscreen rather than a 1px transparent
+        // one: YouTube throttles playback in elements with no layout presence.
+        className="pointer-events-none fixed -left-[9999px] top-0 h-[200px] w-[200px]"
+      />
+    </div>
+  );
+}
+
+const SOURCE_LABELS: Record<string, string> = {
+  spotify: "Spotify",
+  youtube: "YouTube",
+  text: "Pasted list",
+};
+
+function PlaylistHeader({
+  playlist,
+  stats,
+  onChangePlaylist,
+}: {
+  playlist: Playlist;
+  stats: { played: number; won: number; streak: number };
+  onChangePlaylist: () => void;
+}) {
+  return (
+    <header className="flex items-center gap-4">
+      {/*
+        The cover is the shortcut, the button is the label.
+        Reaching for the artwork to swap what you are listening to is the
+        instinct people already have from every music app; the explicit button
+        stays because nothing about a picture announces that it is pressable.
+      */}
+      <button
+        type="button"
+        onClick={onChangePlaylist}
+        aria-label="Change playlist"
+        className="group relative size-16 shrink-0 overflow-hidden rounded-2xl border border-line
+                   transition hover:border-accent/60 active:scale-95"
+      >
+        {playlist.artworkUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={playlist.artworkUrl}
+            alt=""
+            referrerPolicy="no-referrer"
+            className="size-full object-cover"
+          />
+        ) : (
+          <span className="grid size-full place-items-center bg-muted text-fg-faint">♪</span>
+        )}
+
+        <span
+          aria-hidden
+          className="absolute inset-0 grid place-items-center bg-app/70 opacity-0 backdrop-blur-[2px]
+                     transition-opacity duration-200 group-hover:opacity-100 group-focus-visible:opacity-100"
+        >
+          <SwapIcon className="size-5 text-accent" />
+        </span>
+      </button>
+
+      <div className="min-w-0 flex-1">
+        <h1 className="truncate font-display text-lg font-bold text-fg">{playlist.title}</h1>
+        <p className="truncate text-[13px] text-fg-faint">
+          {/* The source lives here rather than in a badge of its own - it is one
+              more detail about the playlist, not a headline. */}
+          <span className="inline-flex items-center gap-1.5 align-middle">
+            <span aria-hidden className="size-1.5 rounded-full bg-accent" />
+            {SOURCE_LABELS[playlist.provider] ?? playlist.provider}
+          </span>
+          {" · "}
+          {playlist.tracks.length} songs
+          {stats.played > 0 && (
+            <>
+              {" · "}
+              {stats.won}/{stats.played} correct
+              {stats.streak > 1 && ` · ${stats.streak} streak`}
+            </>
+          )}
+        </p>
+      </div>
+
+      <button
+        type="button"
+        onClick={onChangePlaylist}
+        className="flex shrink-0 items-center gap-2 rounded-full border-2 border-line bg-surface
+                   px-3 py-2 text-sm font-semibold text-fg-dim transition
+                   hover:border-accent hover:bg-raised hover:text-accent active:scale-95
+                   sm:px-4"
+      >
+        <SwapIcon className="size-4" />
+        <span className="hidden sm:inline">Change</span>
+      </button>
+    </header>
+  );
+}
+
+/** Two arrows trading places - swap this playlist for another. */
+function SwapIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden className={className} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M4 8h13l-3.5-3.5" />
+      <path d="M20 16H7l3.5 3.5" />
+    </svg>
+  );
+}

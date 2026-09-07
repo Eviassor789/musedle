@@ -1,0 +1,247 @@
+@import "tailwindcss";
+
+/*
+ * Design tokens.
+ *
+ * A studio-dark base that stays put, and one accent that moves. Green is the
+ * house colour and the default; the accent only shifts when a playlist brings
+ * its own identity, which today means YouTube red. No component knows which is
+ * in play - they all just use the accent.
+ */
+@theme {
+  /* Studio dark base */
+  --color-app: #121213;
+  --color-surface: #1e1e24;
+  --color-raised: #26262e;
+  --color-line: #2e2e35;
+  --color-muted: #3a3a3c;
+
+  --color-fg: #ffffff;
+  --color-fg-dim: #a0a0a6;
+  --color-fg-faint: #6e6e76;
+
+  /*
+   * Source-driven. These carry the default; each [data-source] block below
+   * redeclares them outright.
+   *
+   * Deliberately *not* an indirection like `var(--accent)`: a custom property
+   * is substituted where it is declared, not where it is used, so a :root-level
+   * alias would resolve once against the :root value and every scoped override
+   * would be ignored.
+   */
+  --color-accent: #1db954;
+  --color-accent-glow: #1ed760;
+  --color-accent-tint: rgba(29, 185, 84, 0.15);
+
+  /*
+   * Feedback states.
+   *
+   * Success is a fixed green rather than the source accent. Tying it to the
+   * accent means a YouTube game paints a correct guess in the same red as a
+   * wrong one, which is exactly backwards - right and wrong have to stay
+   * legible whatever the playlist came from.
+   */
+  --color-correct: #1db954;
+  --color-wrong: #e63946;
+  --color-partial: #ffd166;
+
+  --font-sans: var(--ff-body), ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-display: var(--ff-display), var(--ff-body), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--ff-mono), ui-monospace, "SFMono-Regular", monospace;
+
+  --radius-xl: 0.875rem;
+  --radius-2xl: 1.25rem;
+  --radius-3xl: 1.75rem;
+
+  --animate-rise: rise 0.35s cubic-bezier(0.22, 1, 0.36, 1) both;
+  --animate-pulse-ring: pulse-ring 1.8s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  --animate-source-dot: source-dot 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/*
+ * The one place that decides what the accent is.
+ *
+ * Scoped to a data attribute rather than a class so the value cascades to every
+ * descendant, including canvas code that reads the computed custom property.
+ */
+[data-source="text"] {
+  /* Green is the house colour - the one the game wears before a source is
+     known, and for pasted lists that belong to no service. Only YouTube pulls
+     it away, because red is that platform's own. */
+  --color-accent: #1db954;
+  --color-accent-glow: #1ed760;
+  --color-accent-tint: rgba(29, 185, 84, 0.15);
+}
+
+[data-source="spotify"] {
+  --color-accent: #1db954;
+  --color-accent-glow: #1ed760;
+  --color-accent-tint: rgba(29, 185, 84, 0.15);
+}
+
+[data-source="youtube"] {
+  --color-accent: #ff0000;
+  --color-accent-glow: #ff3333;
+  --color-accent-tint: rgba(255, 0, 0, 0.15);
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes vinyl-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes pulse-ring {
+  0%,
+  100% {
+    opacity: 0.5;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0;
+    transform: scale(1.3);
+  }
+}
+
+@keyframes source-dot {
+  0%,
+  100% {
+    opacity: 1;
+    box-shadow: 0 0 0 0 var(--color-accent-tint);
+  }
+  50% {
+    opacity: 0.6;
+    box-shadow: 0 0 0 5px transparent;
+  }
+}
+
+@layer base {
+  html {
+    color-scheme: dark;
+  }
+
+  body {
+    background-color: var(--color-app);
+    color: var(--color-fg);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    min-height: 100dvh;
+  }
+
+  h1,
+  h2 {
+    font-family: var(--font-display);
+    letter-spacing: -0.02em;
+  }
+
+  /* One consistent focus treatment; never removed, only restyled. */
+  :focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+
+  ::selection {
+    background: var(--color-accent);
+    color: var(--color-app);
+  }
+}
+
+@layer utilities {
+  /* Frosted panel used by every raised surface in the app. */
+  .surface {
+    background-color: color-mix(in srgb, var(--color-surface) 88%, transparent);
+    border: 1px solid var(--color-line);
+    backdrop-filter: blur(20px);
+  }
+
+  /*
+   * Swapping playlists swaps the whole accent, so anything carrying it eases
+   * between the two rather than snapping.
+   */
+  .theme-transition,
+  .theme-transition * {
+    transition:
+      background-color 0.4s ease,
+      border-color 0.4s ease,
+      color 0.4s ease,
+      fill 0.4s ease,
+      box-shadow 0.4s ease;
+  }
+
+  .text-balance {
+    text-wrap: balance;
+  }
+
+  /*
+   * The rotating half of the record. The animation always exists and is simply
+   * paused when idle, so starting playback resumes from the angle it stopped at
+   * instead of snapping back to zero.
+   */
+  .vinyl-disc {
+    transform-box: view-box;
+    transform-origin: center;
+    animation: vinyl-spin 2.4s linear infinite;
+    animation-play-state: paused;
+  }
+
+  .vinyl-disc[data-spinning="true"] {
+    animation-play-state: running;
+  }
+}
+
+/*
+ * Range input with a filled track.
+ *
+ * Browsers disagree about progress before the thumb - WebKit draws none at all
+ * - so the fill is painted as a background gradient the component computes, and
+ * only the thumb is left to the platform.
+ */
+input[type="range"].range-fill {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 4px;
+  border-radius: 999px;
+  outline-offset: 4px;
+}
+
+input[type="range"].range-fill::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: var(--color-accent);
+  border: 2px solid var(--color-app);
+  cursor: pointer;
+}
+
+input[type="range"].range-fill::-moz-range-thumb {
+  width: 11px;
+  height: 11px;
+  border: 2px solid var(--color-app);
+  border-radius: 50%;
+  background: var(--color-accent);
+  cursor: pointer;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
