@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Musedle">
+  <!--
+    Tab icon.
+
+    A filled green tile rather than a green mark on transparency: a tab icon is
+    rendered at 16px against a bar that may be light or dark, and a solid ground
+    is the only way it reads the same in both. The bars are the app's own
+    waveform - mirrored around a centre line, rounded caps - because at this size
+    a vinyl record collapses into an anonymous circle, while four uneven bars are
+    unmistakably sound.
+  -->
+  <rect width="64" height="64" rx="14" fill="#1DB954" />
+  <g fill="#121213">
+    <rect x="12" y="23" width="7" height="18" rx="3.5" />
+    <rect x="23" y="14" width="7" height="36" rx="3.5" />
+    <rect x="34" y="19" width="7" height="26" rx="3.5" />
+    <rect x="45" y="25" width="7" height="14" rx="3.5" />
+  </g>
+</svg>
