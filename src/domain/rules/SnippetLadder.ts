@@ -10,6 +10,16 @@
  */
 export const DEFAULT_LADDER_MS: readonly number[] = [500, 1000, 2000, 4000, 8000, 16000];
 
+/**
+ * The same ladder without its half-second opener - Heardle's original five.
+ *
+ * Spelled out rather than derived from the array above, because these are two
+ * separate game-design decisions that happen to overlap. A player who finds the
+ * half second unfair should get the familiar game, not whatever falls out of
+ * slicing the harder one.
+ */
+export const CLASSIC_LADDER_MS: readonly number[] = [1000, 2000, 4000, 8000, 16000];
+
 export class InvalidLadderError extends Error {}
 
 /**
@@ -45,9 +55,15 @@ export class SnippetLadder {
    * The class is immutable, so sharing is free and safe.
    */
   private static sharedDefault: SnippetLadder | null = null;
+  private static sharedClassic: SnippetLadder | null = null;
 
   static default(): SnippetLadder {
     return (SnippetLadder.sharedDefault ??= SnippetLadder.of(DEFAULT_LADDER_MS));
+  }
+
+  /** The gentler ladder, for players who turn the half-second opener off. */
+  static classic(): SnippetLadder {
+    return (SnippetLadder.sharedClassic ??= SnippetLadder.of(CLASSIC_LADDER_MS));
   }
 
   /** One attempt per rung. */

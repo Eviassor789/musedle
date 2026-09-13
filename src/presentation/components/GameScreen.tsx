@@ -1,10 +1,11 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import type { GameMode } from "@/domain/GameMode";
 import type { Playlist } from "@/domain/entities/Playlist";
 import { lyricLadder, nextLyricHint } from "@/domain/rules/LyricLadder";
 import { SnippetLadder } from "@/domain/rules/SnippetLadder";
+import { pickStartOffsetMs } from "@/domain/rules/startOffset";
+import type { Settings } from "@/presentation/settings";
 import { useLyrics } from "@/presentation/hooks/useLyrics";
 import { useMusedleGame } from "@/presentation/hooks/useMusedleGame";
 import { useSnippetPlayer } from "@/presentation/hooks/useSnippetPlayer";
@@ -17,7 +18,12 @@ import { RoundResult } from "./RoundResult";
 
 interface GameScreenProps {
   readonly playlist: Playlist;
-  readonly mode: GameMode;
+  /**
+   * Snapshotted when the game started, not read live. Both audio settings
+   * decide the shape of a round at the moment it is created, so a game already
+   * in progress must keep the rules it was dealt.
+   */
+  readonly settings: Settings;
   onChangePlaylist(): void;
 }
 
@@ -33,16 +39,33 @@ const MAX_LYRIC_SKIPS = 8;
 /** Close enough to the limit that another press means "from the top". */
 const END_TOLERANCE_MS = 60;
 
-export function GameScreen({ playlist, mode, onChangePlaylist }: GameScreenProps) {
-  const isLyrics = mode === "lyrics";
+export function GameScreen({ playlist, settings, onChangePlaylist }: GameScreenProps) {
+  const isLyrics = settings.mode === "lyrics";
   /*
    * Each mode brings its own ladder, because each mode has its own idea of what
    * a miss buys you: another doubling of the clip, or another hint. They used to
    * be the same length by coincidence, which meant lengthening one silently
    * granted the other an extra guess worth nothing.
    */
-  const game = useMusedleGame(playlist, isLyrics ? lyricLadder() : SnippetLadder.default());
+  const game = useMusedleGame(
+    playlist,
+    isLyrics
+      ? lyricLadder()
+      : settings.halfSecondStage
+        ? SnippetLadder.default()
+        : SnippetLadder.classic(),
+  );
   const lyrics = useLyrics(game.answer, isLyrics);
+
+  /*
+   * Where this round's clip is lifted from. Derived rather than stored: the
+   * rule is seeded on the track, so it returns the same number on every render
+   * without needing to be memoised or kept in state.
+   */
+  const startOffsetMs = settings.randomStart
+    ? pickStartOffsetMs(game.answer, game.ladder.maxDurationMs)
+    : 0;
+
   /*
    * Passing null in lyrics mode keeps the audio engine entirely idle: no
    * buffering, no decode, and - the bug this fixes - nothing that can be told
@@ -51,6 +74,7 @@ export function GameScreen({ playlist, mode, onChangePlaylist }: GameScreenProps
   const player = useSnippetPlayer(isLyrics ? null : game.answer, {
     buckets: WAVE_BAR_COUNT,
     spanMs: game.ladder.maxDurationMs,
+    startOffsetMs,
   });
 
   // How much *extra* audio a skip would buy, which is what the button promises.

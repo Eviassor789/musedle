@@ -69,7 +69,31 @@ So resolution goes through YouTube's InnerTube endpoints (no quota, no key), and
 is cached permanently by `artist + title`, since that mapping never changes. The cache is the
 load-bearing part: resolve a track once, globally, and never pay for it again.
 
-### What you can paste
+### What the device remembers
+
+Three things, in one `localStorage` record, alongside the recently-played row:
+
+| | |
+| --- | --- |
+| **Start at half a second** | On by default. Off drops the opening rung and plays Heardle's original 1/2/4/8/16. |
+| **Start mid-song** | Off by default. Lifts the clip out of the body of the track instead of the intro. |
+| **Last mode played** | Not a preference so much as a memory — leaving a lyrics game should not drop you back on the audio one. |
+
+Both toggles live on the front door and nowhere else, because both decide the shape of a round at
+the moment it is created: how many rungs the ladder has, and where the clip is cut from. A control
+that silently does nothing until the next round is worse than one you have to come back out for.
+The game screen is handed a *snapshot* of them, so changing a setting can never rewrite the rules
+of a game already in progress.
+
+"Start mid-song" is YouTube-only, and the rule that says so is a domain rule rather than a UI
+caveat. A Spotify preview is already a thirty-second excerpt the service chose from the middle of
+the song — moving it would be moving a window that has already been moved, and the last rung needs
+sixteen of those thirty seconds, so any offset worth calling random would run the clip out of audio
+before the ladder finished. Where it does apply, the offset skips the first and last 15% of the
+track (idents and count-ins at one end, fades and dead air at the other), guarantees the whole
+16-second ladder fits before the outro, and is **seeded on the track** rather than rolled fresh: it
+is read during render, and a `Math.random` there would hand back a different answer on every
+repaint.
 
 ### Lyrics mode
 
@@ -131,7 +155,7 @@ src/
 │   ├── GameEngine.ts            the 0.5/1/2/4/8/16 ladder as a finite state machine
 │   ├── Session.ts               rounds, streaks and stats as one pure reduction
 │   ├── entities/                Track, Playlist, AudioSource
-│   └── rules/                   SnippetLadder, TitleNormalizer, similarity
+│   └── rules/                   SnippetLadder, LyricLadder, startOffset, similarity
 │
 ├── application/
 │   ├── ports/                   PlaylistSource · TrackResolver · ResolutionCache · AudioEngine
@@ -150,7 +174,10 @@ src/
 │   ├── VinylRecord              the transport control, as a spinning record
 │   ├── WaveformScrubber         wave, ladder and scrubber as one row
 │   ├── waveformPlaceholder      per-track stand-in for undecodable audio
-│   └── RevealPlayer             listen to the whole track once the round ends
+│   ├── RevealPlayer             listen to the whole track once the round ends
+│   ├── SettingsPanel            the two knobs that change what a round is
+│   ├── settings.ts              what this device remembers, parsed field by field
+│   └── recentPlaylists.ts       the last few playlists played, as a shortcut row
 └── app/                         Next routes; the API handler is deliberately thin
 ```
 

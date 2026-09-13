@@ -4,12 +4,16 @@ import { useEffect, useState } from "react";
 import { type GameMode } from "@/domain/GameMode";
 import { FEATURED_PLAYLISTS } from "@/presentation/featuredPlaylists";
 import { loadRecentPlaylists, type RecentPlaylist } from "@/presentation/recentPlaylists";
+import type { Settings } from "@/presentation/settings";
 import { RecentPlaylists } from "./RecentPlaylists";
+import { SettingsPanel, SettingsToggle } from "./SettingsPanel";
 
 interface PlaylistImportFormProps {
   readonly isLoading: boolean;
   readonly error: string | null;
-  onImport(input: string, mode: GameMode): void;
+  readonly settings: Settings;
+  onSettingsChange(patch: Partial<Settings>): void;
+  onImport(input: string): void;
 }
 
 /**
@@ -19,10 +23,17 @@ interface PlaylistImportFormProps {
  * should not have to scroll past our suggestions to use it - and anyone without
  * one finds the decade cards immediately below, one tap from a full round.
  */
-export function PlaylistImportForm({ isLoading, error, onImport }: PlaylistImportFormProps) {
+export function PlaylistImportForm({
+  isLoading,
+  error,
+  settings,
+  onSettingsChange,
+  onImport,
+}: PlaylistImportFormProps) {
   const [input, setInput] = useState("");
-  const [mode, setMode] = useState<GameMode>("audio");
   const [recent, setRecent] = useState<readonly RecentPlaylist[]>([]);
+  /** Closed by default: two toggles should not greet everyone who arrives. */
+  const [showSettings, setShowSettings] = useState(false);
 
   /*
    * Read after mount rather than during render: localStorage does not exist on
@@ -39,7 +50,7 @@ export function PlaylistImportForm({ isLoading, error, onImport }: PlaylistImpor
   const start = (value: string): void => {
     if (isLoading) return;
     setPending(value);
-    onImport(value, mode);
+    onImport(value);
   };
 
   const submit = (event: React.FormEvent): void => {
@@ -61,7 +72,29 @@ export function PlaylistImportForm({ isLoading, error, onImport }: PlaylistImpor
         </p>
       </header>
 
-      <ModePicker mode={mode} onChange={setMode} disabled={isLoading} />
+      {/*
+        The cog sits in the same row as the mode picker because that is what it
+        qualifies: both settings behind it change what "Hear it" means. Beside
+        rather than below, so opening them costs no vertical space on the fold.
+      */}
+      <div className="flex w-full max-w-md flex-col gap-2">
+        <div className="flex items-stretch gap-2">
+          <ModePicker
+            mode={settings.mode}
+            onChange={(mode) => onSettingsChange({ mode })}
+            disabled={isLoading}
+          />
+          <SettingsToggle
+            open={showSettings}
+            disabled={isLoading}
+            onClick={() => setShowSettings((open) => !open)}
+          />
+        </div>
+
+        {showSettings && (
+          <SettingsPanel settings={settings} disabled={isLoading} onChange={onSettingsChange} />
+        )}
+      </div>
 
       <h2 className="-mb-1 text-center text-[11px] font-semibold uppercase tracking-[0.16em] text-fg-faint">
         Test your own taste
@@ -170,9 +203,15 @@ export function PlaylistImportForm({ isLoading, error, onImport }: PlaylistImpor
   );
 }
 
+/*
+ * Blurbs kept to a couple of words each. The labels above them already say
+ * hear or read, and sharing the row with the cog leaves each button about
+ * 100px of text on a phone - enough for the size of the clue, not for a
+ * sentence about it.
+ */
 const MODES: ReadonlyArray<{ value: GameMode; label: string; blurb: string }> = [
-  { value: "audio", label: "Hear it", blurb: "half a second of the track" },
-  { value: "lyrics", label: "Read it", blurb: "one line of the words" },
+  { value: "audio", label: "Hear it", blurb: "half a second" },
+  { value: "lyrics", label: "Read it", blurb: "one lyric line" },
 ];
 
 /**
@@ -192,7 +231,7 @@ function ModePicker({
     <div
       role="radiogroup"
       aria-label="How to play"
-      className="flex w-full max-w-sm gap-1.5 rounded-2xl border border-line bg-surface p-1.5"
+      className="flex min-w-0 flex-1 gap-1.5 rounded-2xl border border-line bg-surface p-1.5"
     >
       {MODES.map((option) => {
         const active = option.value === mode;

@@ -31,6 +31,15 @@ export interface SnippetPlayerOptions {
   readonly buckets: number;
   /** How much of the song the waveform should span. */
   readonly spanMs: number;
+  /**
+   * Where inside the recording this round's clip begins.
+   *
+   * Everything else in this hook counts from here: position 0 is the first
+   * moment of the clip, not of the file. That is what lets the clip be lifted
+   * out of the middle of a song without the ladder, the waveform or the
+   * scrubber needing to know it moved.
+   */
+  readonly startOffsetMs?: number;
 }
 
 /**
@@ -47,7 +56,7 @@ export interface SnippetPlayerOptions {
  */
 export function useSnippetPlayer(
   track: Track | null,
-  { buckets, spanMs }: SnippetPlayerOptions,
+  { buckets, spanMs, startOffsetMs = 0 }: SnippetPlayerOptions,
 ): SnippetPlayer {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const engineRef = useRef<CompositeAudioEngine | null>(null);
@@ -93,7 +102,7 @@ export function useSnippetPlayer(
     if (!track) return;
 
     let cancelled = false;
-    void engineRef.current?.prepare(track.source).catch(() => {
+    void engineRef.current?.prepare({ ...track.source, startOffsetMs }).catch(() => {
       if (!cancelled) setState("error");
     });
 
@@ -101,7 +110,7 @@ export function useSnippetPlayer(
       cancelled = true;
       engineRef.current?.stop();
     };
-  }, [track]);
+  }, [track, startOffsetMs]);
 
   /*
    * Decode the whole clip up front so the wave is on screen before the first
@@ -114,7 +123,7 @@ export function useSnippetPlayer(
 
     let cancelled = false;
     void engineRef.current
-      ?.sampleWaveform(track.source, buckets, spanMs)
+      ?.sampleWaveform({ ...track.source, startOffsetMs }, buckets, spanMs)
       .then((sampled) => {
         if (!cancelled) setPeaks(sampled);
       })
@@ -123,7 +132,7 @@ export function useSnippetPlayer(
     return () => {
       cancelled = true;
     };
-  }, [track, buckets, spanMs]);
+  }, [track, buckets, spanMs, startOffsetMs]);
 
   const play = useCallback(
     (fromMs: number, toMs: number) => {
@@ -135,12 +144,16 @@ export function useSnippetPlayer(
 
       void engineRef.current
         ?.playSnippet({
-          source: { ...track.source, startOffsetMs: fromMs },
+          // Added to the clip's own origin, not substituted for it: `fromMs` is
+          // a position within the clip, and the engine wants a position within
+          // the file. They are only the same number when the clip starts at the
+          // top of the song.
+          source: { ...track.source, startOffsetMs: startOffsetMs + fromMs },
           durationMs: toMs - fromMs,
         })
         .catch(() => setState("error"));
     },
-    [track],
+    [track, startOffsetMs],
   );
 
   const stop = useCallback(() => {

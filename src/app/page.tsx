@@ -1,22 +1,26 @@
 "use client";
 
 import { useCallback, useState } from "react";
-import type { GameMode } from "@/domain/GameMode";
 import type { Playlist } from "@/domain/entities/Playlist";
 import { GameScreen } from "@/presentation/components/GameScreen";
 import { PlaylistImportForm } from "@/presentation/components/PlaylistImportForm";
+import { useSettings } from "@/presentation/hooks/useSettings";
 import { rememberPlaylist } from "@/presentation/recentPlaylists";
+import type { Settings } from "@/presentation/settings";
 
 type Screen =
   | { readonly name: "import"; readonly error: string | null; readonly isLoading: boolean }
-  | { readonly name: "game"; readonly playlist: Playlist; readonly mode: GameMode };
+  /** The settings are captured here so a running game keeps the rules it started with. */
+  | { readonly name: "game"; readonly playlist: Playlist; readonly settings: Settings };
 
 const IMPORT_IDLE: Screen = { name: "import", error: null, isLoading: false };
 
 export default function HomePage() {
   const [screen, setScreen] = useState<Screen>(IMPORT_IDLE);
+  // One owner for everything this device remembers; both screens read from it.
+  const { settings, update } = useSettings();
 
-  const importPlaylist = useCallback(async (input: string, mode: GameMode): Promise<void> => {
+  const importPlaylist = useCallback(async (input: string): Promise<void> => {
     setScreen({ name: "import", error: null, isLoading: true });
 
     try {
@@ -38,7 +42,7 @@ export default function HomePage() {
       const playlist = payload as Playlist;
       // Recorded on success only, so a mistyped link never joins the shortcuts.
       rememberPlaylist(playlist, input);
-      setScreen({ name: "game", playlist, mode });
+      setScreen({ name: "game", playlist, settings });
     } catch {
       setScreen({
         name: "import",
@@ -46,7 +50,7 @@ export default function HomePage() {
         isLoading: false,
       });
     }
-  }, []);
+  }, [settings]);
 
   return (
     <main
@@ -59,12 +63,14 @@ export default function HomePage() {
         <PlaylistImportForm
           isLoading={screen.isLoading}
           error={screen.error}
-          onImport={(input, mode) => void importPlaylist(input, mode)}
+          settings={settings}
+          onSettingsChange={update}
+          onImport={(input) => void importPlaylist(input)}
         />
       ) : (
         <GameScreen
           playlist={screen.playlist}
-          mode={screen.mode}
+          settings={screen.settings}
           onChangePlaylist={() => setScreen(IMPORT_IDLE)}
         />
       )}
