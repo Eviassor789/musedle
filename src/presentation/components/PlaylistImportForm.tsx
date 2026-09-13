@@ -79,8 +79,11 @@ export function PlaylistImportForm({
       */}
       <div className="flex w-full max-w-md flex-col gap-2">
         <div className="flex items-stretch gap-2">
+          {/* Balances the cog opposite it, so the picker itself - not the pair -
+              shares the centre line the hero and everything below it sit on. */}
+          <span aria-hidden className="w-9 shrink-0" />
           <ModePicker
-            mode={settings.mode}
+            settings={settings}
             onChange={(mode) => onSettingsChange({ mode })}
             disabled={isLoading}
           />
@@ -203,37 +206,49 @@ export function PlaylistImportForm({
   );
 }
 
-/*
- * Blurbs kept to a couple of words each. The labels above them already say
- * hear or read, and sharing the row with the cog leaves each button about
- * 100px of text on a phone - enough for the size of the clue, not for a
- * sentence about it.
+/**
+ * What each mode gives you, in a couple of words.
+ *
+ * The audio one reads the settings rather than stating a constant: the opening
+ * clue is a second or half of one depending on the switch behind the cog, and a
+ * label that says otherwise is lying about the game you are about to start.
+ * Kept short because the labels above already say hear or read, and sharing the
+ * row with the cog leaves each button about 100px of text on a phone.
  */
-const MODES: ReadonlyArray<{ value: GameMode; label: string; blurb: string }> = [
-  { value: "audio", label: "Hear it", blurb: "half a second" },
-  { value: "lyrics", label: "Read it", blurb: "one lyric line" },
-];
+function modeOptions(
+  settings: Settings,
+): ReadonlyArray<{ value: GameMode; label: string; blurb: string }> {
+  return [
+    {
+      value: "audio",
+      label: "Hear it",
+      blurb: `${settings.halfSecondStage ? "0.5s" : "1s"} of the track`,
+    },
+    { value: "lyrics", label: "Read it", blurb: "one lyric line" },
+  ];
+}
 
 /**
  * Chosen before the playlist, because it changes what a round even is - and
  * whichever way you start, the buttons below both honour it.
  */
 function ModePicker({
-  mode,
+  settings,
   onChange,
   disabled,
 }: {
-  mode: GameMode;
+  settings: Settings;
   onChange: (mode: GameMode) => void;
   disabled: boolean;
 }) {
+  const mode = settings.mode;
   return (
     <div
       role="radiogroup"
       aria-label="How to play"
       className="flex min-w-0 flex-1 gap-1.5 rounded-2xl border border-line bg-surface p-1.5"
     >
-      {MODES.map((option) => {
+      {modeOptions(settings).map((option) => {
         const active = option.value === mode;
         return (
           <button

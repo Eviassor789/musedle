@@ -1,24 +1,19 @@
-/**
- * Beadle/Heardle progression: each miss doubles what you get to hear.
- *
- * It opens on half a second rather than a full one. A second is already enough
- * to carry a hook you know cold - the drum fill, the first sung syllable - so
- * the opening rung was rarely the hard one it is meant to be. Half a second is
- * texture rather than phrase: you get the timbre, the room, the attack, and
- * little else. The familiar 1s clue is not lost, it just becomes the reward for
- * the first miss, and every rung after it is untouched.
- */
-export const DEFAULT_LADDER_MS: readonly number[] = [500, 1000, 2000, 4000, 8000, 16000];
+/** Beadle/Heardle progression: each miss doubles what you get to hear. */
+export const DEFAULT_LADDER_MS: readonly number[] = [1000, 2000, 4000, 8000, 16000];
 
 /**
- * The same ladder without its half-second opener - Heardle's original five.
+ * The same ladder with a half-second rung in front of it, for players who want
+ * the opening clue to actually be hard.
+ *
+ * A second is already enough to carry a hook you know cold - the drum fill, the
+ * first sung syllable. Half a second is texture rather than phrase: the timbre,
+ * the room, the attack, and little else. Nothing is taken away by turning it
+ * on; the familiar 1s clue simply becomes the reward for the first miss.
  *
  * Spelled out rather than derived from the array above, because these are two
- * separate game-design decisions that happen to overlap. A player who finds the
- * half second unfair should get the familiar game, not whatever falls out of
- * slicing the harder one.
+ * separate game-design decisions that happen to overlap.
  */
-export const CLASSIC_LADDER_MS: readonly number[] = [1000, 2000, 4000, 8000, 16000];
+export const HARD_LADDER_MS: readonly number[] = [500, 1000, 2000, 4000, 8000, 16000];
 
 export class InvalidLadderError extends Error {}
 
@@ -55,15 +50,15 @@ export class SnippetLadder {
    * The class is immutable, so sharing is free and safe.
    */
   private static sharedDefault: SnippetLadder | null = null;
-  private static sharedClassic: SnippetLadder | null = null;
+  private static sharedHard: SnippetLadder | null = null;
 
   static default(): SnippetLadder {
     return (SnippetLadder.sharedDefault ??= SnippetLadder.of(DEFAULT_LADDER_MS));
   }
 
-  /** The gentler ladder, for players who turn the half-second opener off. */
-  static classic(): SnippetLadder {
-    return (SnippetLadder.sharedClassic ??= SnippetLadder.of(CLASSIC_LADDER_MS));
+  /** The steeper ladder, for players who switch the 0.5s opener on. */
+  static hard(): SnippetLadder {
+    return (SnippetLadder.sharedHard ??= SnippetLadder.of(HARD_LADDER_MS));
   }
 
   /** One attempt per rung. */

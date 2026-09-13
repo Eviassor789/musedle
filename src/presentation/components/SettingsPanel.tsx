@@ -20,8 +20,9 @@ export function SettingsPanel({ settings, disabled, onChange }: SettingsPanelPro
   return (
     <div className="surface animate-rise flex w-full flex-col rounded-2xl p-1.5">
       <SettingRow
-        title="Start at half a second"
-        hint="The hardest opening clue. Off begins the ladder at a full second."
+        title="Start at 0.5s"
+        badge="Hard"
+        hint="Half the opening clue, and a sixth guess to make up for it. Off starts at 1s."
         checked={settings.halfSecondStage}
         disabled={disabled}
         onChange={(halfSecondStage) => onChange({ halfSecondStage })}
@@ -49,12 +50,15 @@ export function SettingsPanel({ settings, disabled, onChange }: SettingsPanelPro
 
 function SettingRow({
   title,
+  badge,
   hint,
   checked,
   disabled,
   onChange,
 }: {
   title: string;
+  /** A word of warning that has to land before the hint is read, if at all. */
+  badge?: string;
   hint: string;
   checked: boolean;
   disabled: boolean;
@@ -73,7 +77,17 @@ function SettingRow({
                  hover:bg-raised disabled:cursor-not-allowed disabled:opacity-50"
     >
       <span className="min-w-0 flex-1">
-        <span className="block text-[13px] font-medium text-fg">{title}</span>
+        <span className="flex items-center gap-1.5">
+          <span className="text-[13px] font-medium text-fg">{title}</span>
+          {badge && (
+            // Amber, not red: this is a difficulty, not a warning. It sits on
+            // the title line so the cost registers before the sentence below
+            // has to be read at all.
+            <span className="rounded-full bg-partial/20 px-1.5 py-px text-[9px] font-bold uppercase tracking-wider text-partial">
+              {badge}
+            </span>
+          )}
+        </span>
         <span className="mt-0.5 block text-[11px] leading-snug text-fg-faint">{hint}</span>
       </span>
       <Switch checked={checked} />
@@ -99,7 +113,15 @@ function Switch({ checked }: { checked: boolean }) {
   );
 }
 
-/** The cog that opens the panel. Lives beside the mode picker it qualifies. */
+/**
+ * The cog that opens the panel.
+ *
+ * Bare - no border, no fill. It sits beside the mode picker because that is
+ * what it qualifies, and a bordered box there read as a third segment of a
+ * two-option control. Stripped back it is an accessory to the picker rather
+ * than a peer, and the quarter turn on open carries the state the background
+ * used to.
+ */
 export function SettingsToggle({
   open,
   disabled,
@@ -116,11 +138,9 @@ export function SettingsToggle({
       disabled={disabled}
       aria-expanded={open}
       aria-label="Game options"
-      className={`grid shrink-0 place-items-center rounded-2xl border px-4 transition
+      className={`grid shrink-0 place-items-center rounded-xl px-2 transition
                   disabled:cursor-not-allowed disabled:opacity-50 ${
-                    open
-                      ? "border-accent/50 bg-raised text-accent"
-                      : "border-line bg-surface text-fg-dim hover:bg-raised hover:text-fg"
+                    open ? "text-accent" : "text-fg-faint hover:text-fg"
                   }`}
     >
       <CogIcon className={`size-5 transition-transform duration-300 ${open ? "rotate-90" : ""}`} />

@@ -11,9 +11,9 @@ import { isGameMode, type GameMode } from "@/domain/GameMode";
  */
 export interface Settings {
   /**
-   * Open the audio ladder on half a second instead of a full one.
-   * On by default: it is the game as designed, and the gentler ladder is the
-   * concession rather than the other way round.
+   * Open the audio ladder on 0.5s instead of 1s, for a sixth rung and a much
+   * harder first clue. Off by default: one second is the game everyone already
+   * knows, and difficulty this steep should be asked for rather than inflicted.
    */
   readonly halfSecondStage: boolean;
   /**
@@ -30,7 +30,7 @@ export interface Settings {
 }
 
 export const DEFAULT_SETTINGS: Settings = {
-  halfSecondStage: true,
+  halfSecondStage: false,
   randomStart: false,
   mode: "audio",
 };

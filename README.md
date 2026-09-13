@@ -1,11 +1,11 @@
 # Musedle
 
-**Music × Wordle.** Name the song from half a second of audio. Miss, and you get a whole one.
-Then two, four, eight, sixteen.
+**Music × Wordle.** Name the song from one second of audio. Miss, and you get two. Then four,
+eight, sixteen. There is a harder ladder behind a switch that opens on half a second.
 
 Heardle's format, but pointed at **any playlist you paste** — Spotify, YouTube, or a plain
-list of songs — instead of one fixed catalogue. Two ways to play: **Hear it**, half a second of
-the recording, or **Read it**, one line of the words.
+list of songs — instead of one fixed catalogue. Two ways to play: **Hear it**, one second of the
+recording, or **Read it**, one line of the words.
 
 ```bash
 npm install
@@ -75,9 +75,13 @@ Three things, in one `localStorage` record, alongside the recently-played row:
 
 | | |
 | --- | --- |
-| **Start at half a second** | On by default. Off drops the opening rung and plays Heardle's original 1/2/4/8/16. |
+| **Start at 0.5s** | Off by default. On, the ladder gains a half-second opening rung — and a sixth guess to pay for it. |
 | **Start mid-song** | Off by default. Lifts the clip out of the body of the track instead of the intro. |
 | **Last mode played** | Not a preference so much as a memory — leaving a lyrics game should not drop you back on the audio one. |
+
+The default is Heardle's 1/2/4/8/16, because that is the game people already know and a clue this
+short should be asked for rather than inflicted. The label under **Hear it** reads the switch
+rather than stating a constant, so the picker always names the clue you are actually about to get.
 
 Both toggles live on the front door and nowhere else, because both decide the shape of a round at
 the moment it is created: how many rungs the ladder has, and where the clip is cut from. A control
@@ -99,8 +103,9 @@ repaint.
 
 Same near-miss rules; what a miss buys you is different. Instead of more seconds you get more to
 read, one thing at a time — a line, then the artist, then a second line, then the album, then a
-third. That is five attempts to the audio game's six, because the two modes carry their own
-ladders: an attempt that reveals nothing new is not an attempt. Words come from
+third. Five attempts, whatever the audio ladder is set to, because the two modes carry their own
+ladders: an attempt that reveals nothing new is not an attempt, so switching on the 0.5s rung must
+not quietly hand lyrics players a sixth guess that buys them nothing. Words come from
 [LRCLIB](https://lrclib.net), which is open, free and needs no key.
 
 Three things had to be got right for it to be playable at all:
@@ -152,7 +157,7 @@ from; everything volatile is an adapter behind an interface.
 ```
 src/
 ├── domain/                      pure, no I/O, fully unit-tested
-│   ├── GameEngine.ts            the 0.5/1/2/4/8/16 ladder as a finite state machine
+│   ├── GameEngine.ts            the 1/2/4/8/16 ladder as a finite state machine
 │   ├── Session.ts               rounds, streaks and stats as one pure reduction
 │   ├── entities/                Track, Playlist, AudioSource
 │   └── rules/                   SnippetLadder, LyricLadder, startOffset, similarity

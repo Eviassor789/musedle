@@ -52,8 +52,8 @@ export function GameScreen({ playlist, settings, onChangePlaylist }: GameScreenP
     isLyrics
       ? lyricLadder()
       : settings.halfSecondStage
-        ? SnippetLadder.default()
-        : SnippetLadder.classic(),
+        ? SnippetLadder.hard()
+        : SnippetLadder.default(),
   );
   const lyrics = useLyrics(game.answer, isLyrics);
 
