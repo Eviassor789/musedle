@@ -58,6 +58,20 @@ const BAR_GAP_RATIO = 0.52;
  */
 const PLAYED_THRESHOLD = 0.8;
 
+/**
+ * How close two rung labels may sit, as a share of the whole span.
+ *
+ * A doubling ladder crams its opening rungs into the left few percent of the
+ * axis, so the numbers under the wave need two tiers of yielding. Closer than
+ * TIGHT_GAP and a pair cannot be read at any width, so only one of the two is
+ * ever drawn. Closer than NARROW_GAP and they fit on a desktop but not in the
+ * ~200px the wave gets beside the record on a phone, so the later one steps
+ * aside there. The hairline ticks on the canvas still mark every rung either
+ * way - it is only the numbers that thin out.
+ */
+const TIGHT_GAP_PERCENT = 4;
+const NARROW_GAP_PERCENT = 7;
+
 export function WaveformScrubber({
   ladder,
   unlockedMs,
@@ -344,20 +358,49 @@ export function WaveformScrubber({
       <div className="relative h-4" aria-hidden>
         {ladder.stepsMs.map((stepMs, index) => {
           const unlocked = stepMs <= unlockedMs;
-          // The early rungs sit close together - on a doubling ladder the first
-          // two are always the tightest pair - and collide on a narrow screen.
-          // Anything with too little room to its left steps aside there.
-          const previousMs = ladder.stepsMs[index - 1] ?? 0;
-          const gapPercent = ((stepMs - previousMs) / totalMs) * 100;
-          const crowded = index > 0 && gapPercent < 7;
+
+          const previousMs = ladder.stepsMs[index - 1];
+          const nextMs = ladder.stepsMs[index + 1];
+          const gapBefore =
+            previousMs === undefined ? Infinity : ((stepMs - previousMs) / totalMs) * 100;
+          const gapAfter =
+            nextMs === undefined ? Infinity : ((nextMs - stepMs) / totalMs) * 100;
+
+          /*
+           * The opening pair are the tightest on the ladder: half a second and
+           * one second sit 3% of a sixteen-second span apart, closer together
+           * than either label is wide. So only one of the two is drawn, and it
+           * is whichever one is live - the half second you start on, and then
+           * the full second that replaces it after the first miss. The unlock
+           * boundary only ever moves forward, so that swap happens once in a
+           * round and never flickers back.
+           */
+          const supersededByNext =
+            nextMs !== undefined && gapAfter < TIGHT_GAP_PERCENT && unlockedMs >= nextMs;
+          const notYetEarned = gapBefore < TIGHT_GAP_PERCENT && unlockedMs < stepMs;
+          if (supersededByNext || notYetEarned) return null;
+
+          // Far enough apart to read on a desktop, too close on a phone.
+          const narrow = gapBefore < NARROW_GAP_PERCENT;
+
+          /*
+           * The outermost rungs sit on the ends of the axis, where a centred
+           * label hangs off the wave - over the record on the left, into the
+           * card's padding on the right. Anchored to the edge instead, the way
+           * the first and last tick of an axis usually are. The half-second
+           * rung made this visible on the left; the sixteen was always doing it
+           * on the right.
+           */
+          const position = stepMs / totalMs;
+          const edge = position < 0.05 ? "left" : position > 0.95 ? "right" : null;
 
           return (
             <span
               key={stepMs}
-              className={`absolute -translate-x-1/2 font-mono text-[10px] tabular-nums transition-colors sm:text-[11px] ${
-                crowded ? "hidden sm:inline" : ""
-              } ${unlocked ? "text-fg-dim" : "text-muted"}`}
-              style={{ left: `${(stepMs / totalMs) * 100}%` }}
+              className={`absolute font-mono text-[10px] tabular-nums transition-colors sm:text-[11px] ${
+                edge ? "" : "-translate-x-1/2"
+              } ${narrow ? "hidden sm:inline" : ""} ${unlocked ? "text-fg-dim" : "text-muted"}`}
+              style={edge === null ? { left: `${position * 100}%` } : { [edge]: 0 }}
             >
               {stepMs / 1000}s
             </span>

@@ -29,9 +29,9 @@ const mono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Musedle - name the song in one second",
+  title: "Musedle - name the song in half a second",
   description:
-    "Music meets Wordle. Turn any Spotify or YouTube playlist into a song-guessing game: one second of audio, five chances.",
+    "Music meets Wordle. Turn any Spotify or YouTube playlist into a song-guessing game: half a second of audio, six chances.",
 };
 
 export const viewport: Viewport = {

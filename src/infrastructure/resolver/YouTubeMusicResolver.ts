@@ -17,7 +17,7 @@ import { parseDurationLabel } from "@/domain/rules/TitleNormalizer";
  * The `params` blob below is YouTube Music's "Songs only" search filter. It
  * matters more than it looks: song results are the plain studio audio, whereas
  * unfiltered results are full of music videos that open with several seconds of
- * label idents and dialogue - death for a game whose first clue is one second.
+ * label idents and dialogue - death for a game whose first clue is half a second.
  */
 
 /** Base64 protobuf for the "Songs" filter tab. */

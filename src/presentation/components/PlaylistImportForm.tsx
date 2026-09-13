@@ -171,7 +171,7 @@ export function PlaylistImportForm({ isLoading, error, onImport }: PlaylistImpor
 }
 
 const MODES: ReadonlyArray<{ value: GameMode; label: string; blurb: string }> = [
-  { value: "audio", label: "Hear it", blurb: "one second of the track" },
+  { value: "audio", label: "Hear it", blurb: "half a second of the track" },
   { value: "lyrics", label: "Read it", blurb: "one line of the words" },
 ];
 

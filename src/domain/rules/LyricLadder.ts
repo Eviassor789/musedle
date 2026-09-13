@@ -12,6 +12,8 @@
  *   4th guess   + the album
  *   5th guess   + a third line
  */
+import { SnippetLadder } from "./SnippetLadder";
+
 export interface LyricReveal {
   /** How many lyric lines are on screen. */
   readonly lines: number;
@@ -29,6 +31,28 @@ const SCHEDULE: readonly LyricReveal[] = [
 
 /** Attempts allowed in a lyrics round - one per rung, as with the audio game. */
 export const LYRIC_ATTEMPTS = SCHEDULE.length;
+
+/**
+ * The attempt ladder for a lyrics round.
+ *
+ * The engine counts attempts in rungs, and a lyrics round has no audio, so it
+ * borrows the ladder purely for its length - the millisecond values are never
+ * read, because the player deck is not on screen in this mode. Deriving the
+ * length from SCHEDULE rather than sharing the audio ladder is the whole point:
+ * when the audio game grew a half-second rung it would otherwise have handed
+ * lyrics players a sixth guess that buys them no sixth hint.
+ *
+ * One shared instance, for the same reason SnippetLadder.default() is: this is
+ * read during render, and a fresh object each time invalidates any effect keyed
+ * on the ladder's identity.
+ */
+let sharedLyricLadder: SnippetLadder | null = null;
+
+export function lyricLadder(): SnippetLadder {
+  return (sharedLyricLadder ??= SnippetLadder.of(
+    SCHEDULE.map((_, index) => (index + 1) * 1000),
+  ));
+}
 
 /** The most lines any round will ever need to have chosen up front. */
 export const MAX_LYRIC_LINES = Math.max(...SCHEDULE.map((step) => step.lines));

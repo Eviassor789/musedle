@@ -1,5 +1,14 @@
-/** Beadle/Heardle progression: each miss doubles what you get to hear. */
-export const DEFAULT_LADDER_MS: readonly number[] = [1000, 2000, 4000, 8000, 16000];
+/**
+ * Beadle/Heardle progression: each miss doubles what you get to hear.
+ *
+ * It opens on half a second rather than a full one. A second is already enough
+ * to carry a hook you know cold - the drum fill, the first sung syllable - so
+ * the opening rung was rarely the hard one it is meant to be. Half a second is
+ * texture rather than phrase: you get the timbre, the room, the attack, and
+ * little else. The familiar 1s clue is not lost, it just becomes the reward for
+ * the first miss, and every rung after it is untouched.
+ */
+export const DEFAULT_LADDER_MS: readonly number[] = [500, 1000, 2000, 4000, 8000, 16000];
 
 export class InvalidLadderError extends Error {}
 

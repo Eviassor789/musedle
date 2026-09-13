@@ -3,7 +3,8 @@
 import { useEffect, useRef } from "react";
 import type { GameMode } from "@/domain/GameMode";
 import type { Playlist } from "@/domain/entities/Playlist";
-import { nextLyricHint } from "@/domain/rules/LyricLadder";
+import { lyricLadder, nextLyricHint } from "@/domain/rules/LyricLadder";
+import { SnippetLadder } from "@/domain/rules/SnippetLadder";
 import { useLyrics } from "@/presentation/hooks/useLyrics";
 import { useMusedleGame } from "@/presentation/hooks/useMusedleGame";
 import { useSnippetPlayer } from "@/presentation/hooks/useSnippetPlayer";
@@ -33,8 +34,14 @@ const MAX_LYRIC_SKIPS = 8;
 const END_TOLERANCE_MS = 60;
 
 export function GameScreen({ playlist, mode, onChangePlaylist }: GameScreenProps) {
-  const game = useMusedleGame(playlist);
   const isLyrics = mode === "lyrics";
+  /*
+   * Each mode brings its own ladder, because each mode has its own idea of what
+   * a miss buys you: another doubling of the clip, or another hint. They used to
+   * be the same length by coincidence, which meant lengthening one silently
+   * granted the other an extra guess worth nothing.
+   */
+  const game = useMusedleGame(playlist, isLyrics ? lyricLadder() : SnippetLadder.default());
   const lyrics = useLyrics(game.answer, isLyrics);
   /*
    * Passing null in lyrics mode keeps the audio engine entirely idle: no

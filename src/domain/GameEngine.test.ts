@@ -23,18 +23,18 @@ const play = (state: GameState, ...actions: Parameters<typeof reduceGame>[1][]) 
 test("starts in progress with only the first rung unlocked", () => {
   const game = createGame(ANSWER);
   assert.equal(game.status, "in_progress");
-  assert.equal(unlockedMs(game), 1000);
-  assert.equal(attemptsRemaining(game), 5);
+  assert.equal(unlockedMs(game), 500);
+  assert.equal(attemptsRemaining(game), 6);
 });
 
 test("each miss doubles the unlocked audio", () => {
   let game = createGame(ANSWER);
   const heard: number[] = [unlockedMs(game)];
-  for (let i = 0; i < 4; i++) {
+  for (let i = 0; i < 5; i++) {
     game = reduceGame(game, SKIP);
     heard.push(unlockedMs(game));
   }
-  assert.deepEqual(heard, [1000, 2000, 4000, 8000, 16000]);
+  assert.deepEqual(heard, [500, 1000, 2000, 4000, 8000, 16000]);
 });
 
 test("a correct guess wins and reveals the full snippet", () => {
@@ -45,13 +45,13 @@ test("a correct guess wins and reveals the full snippet", () => {
 });
 
 test("running out of attempts loses", () => {
-  const game = play(createGame(ANSWER), SKIP, SKIP, SKIP, SKIP, SKIP);
+  const game = play(createGame(ANSWER), SKIP, SKIP, SKIP, SKIP, SKIP, SKIP);
   assert.equal(game.status, "lost");
   assert.equal(attemptsRemaining(game), 0);
 });
 
 test("a wrong guess on the final rung loses", () => {
-  const game = play(createGame(ANSWER), SKIP, SKIP, SKIP, SKIP, guess(WRONG));
+  const game = play(createGame(ANSWER), SKIP, SKIP, SKIP, SKIP, SKIP, guess(WRONG));
   assert.equal(game.status, "lost");
 });
 
@@ -71,7 +71,7 @@ test("state is never mutated in place", () => {
 
 test("share squares mark skips, misses and the win", () => {
   const game = play(createGame(ANSWER), SKIP, guess(WRONG), guess(ANSWER));
-  assert.equal(shareSquares(game), "\u2B1C\uD83D\uDFE5\uD83D\uDFE9\u2B1B\u2B1B");
+  assert.equal(shareSquares(game), "\u2B1C\uD83D\uDFE5\uD83D\uDFE9\u2B1B\u2B1B\u2B1B");
 });
 
 test("a custom ladder drives the whole game", () => {

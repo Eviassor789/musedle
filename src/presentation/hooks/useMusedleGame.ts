@@ -100,7 +100,10 @@ export function useMusedleGame(playlist: Playlist, ladder = SnippetLadder.defaul
   return {
     answer,
     state: session.game,
-    ladder,
+    // Read back out of the state rather than passed straight through: the
+    // reducer is seeded once, so this is the ladder the engine is actually
+    // scoring against even if the argument were to change underneath it.
+    ladder: session.game.ladder,
     unlockedMs: unlockedMs(session.game),
     attemptsLeft: attemptsRemaining(session.game),
     isOver: isOver(session.game),

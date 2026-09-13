@@ -13,6 +13,10 @@ const SKIP: SessionAction = { type: "SKIP" };
 const play = (state: SessionState, ...actions: SessionAction[]) =>
   actions.reduce(sessionReducer, state);
 
+/** Skips every rung, however many the ladder has, and so loses the round. */
+const loseRound = (state: SessionState) =>
+  play(state, ...Array.from({ length: LADDER.maxAttempts }, () => SKIP));
+
 test("a win is counted exactly once", () => {
   const session = play(createSession(A, LADDER), guess(A));
   assert.deepEqual(session.stats, { played: 1, won: 1, streak: 1, bestStreak: 1 });
@@ -37,7 +41,7 @@ test("replaying the same transition does not double-count", () => {
 test("a loss breaks the streak but still counts as played", () => {
   let session = play(createSession(A, LADDER), guess(A));
   session = sessionReducer(session, { type: "NEXT_ROUND", answerId: B });
-  session = play(session, SKIP, SKIP, SKIP, SKIP, SKIP);
+  session = loseRound(session);
 
   assert.deepEqual(session.stats, { played: 2, won: 1, streak: 0, bestStreak: 1 });
 });
@@ -50,7 +54,7 @@ test("best streak survives a later loss", () => {
   }
   assert.equal(session.stats.bestStreak, 3);
 
-  session = play(session, SKIP, SKIP, SKIP, SKIP, SKIP);
+  session = loseRound(session);
   assert.equal(session.stats.streak, 0);
   assert.equal(session.stats.bestStreak, 3);
 });

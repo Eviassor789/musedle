@@ -1,11 +1,11 @@
 # Musedle
 
-**Music × Wordle.** Name the song from one second of audio. Miss, and you get two. Then four,
-eight, sixteen.
+**Music × Wordle.** Name the song from half a second of audio. Miss, and you get a whole one.
+Then two, four, eight, sixteen.
 
 Heardle's format, but pointed at **any playlist you paste** — Spotify, YouTube, or a plain
-list of songs — instead of one fixed catalogue. Two ways to play: **Hear it**, one second of the
-recording, or **Read it**, one line of the words.
+list of songs — instead of one fixed catalogue. Two ways to play: **Hear it**, half a second of
+the recording, or **Read it**, one line of the words.
 
 ```bash
 npm install
@@ -73,10 +73,11 @@ load-bearing part: resolve a track once, globally, and never pay for it again.
 
 ### Lyrics mode
 
-Same five attempts, same near-miss rules; what a miss buys you is different. Instead of more
-seconds you get more to read, one thing at a time — a line, then the artist, then a second line,
-then the album, then a third. Words come from [LRCLIB](https://lrclib.net), which is open, free
-and needs no key.
+Same near-miss rules; what a miss buys you is different. Instead of more seconds you get more to
+read, one thing at a time — a line, then the artist, then a second line, then the album, then a
+third. That is five attempts to the audio game's six, because the two modes carry their own
+ladders: an attempt that reveals nothing new is not an attempt. Words come from
+[LRCLIB](https://lrclib.net), which is open, free and needs no key.
 
 Three things had to be got right for it to be playable at all:
 
@@ -127,7 +128,7 @@ from; everything volatile is an adapter behind an interface.
 ```
 src/
 ├── domain/                      pure, no I/O, fully unit-tested
-│   ├── GameEngine.ts            the 1/2/4/8/16 ladder as a finite state machine
+│   ├── GameEngine.ts            the 0.5/1/2/4/8/16 ladder as a finite state machine
 │   ├── Session.ts               rounds, streaks and stats as one pure reduction
 │   ├── entities/                Track, Playlist, AudioSource
 │   └── rules/                   SnippetLadder, TitleNormalizer, similarity
