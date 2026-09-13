@@ -132,9 +132,36 @@ Single_Jahres", "Rap Hip hop Selecta". Those are penalised in ranking and withhe
 anyway, because a hint naming the wrong album is worse than no hint. When the album is withheld
 that rung spends itself on an extra lyric line instead, so **every miss still pays out something**.
 
-A track with no usable words is skipped silently for another, up to a bound — LRCLIB does not
-have everything, and an unbounded search would shuffle forever through a playlist it has never
-heard of.
+A track with no usable words is passed over for another, up to a bound — LRCLIB does not have
+everything, and an unbounded search would shuffle forever through a playlist it has never heard
+of. The player is told which song came up empty, because songs changing underneath you with no
+explanation reads as a bug. When the bound is reached, or the shuffle comes back round to a song
+already passed over, the round stops and says the playlist is not covered — and offers to play
+the same playlist by ear instead, which is the actual remedy rather than just the diagnosis.
+
+### One normaliser, not four
+
+`normalizeKey` folds case, accents and punctuation away so that near-enough titles match. It used
+to be written `[^a-z0-9]+`, which does not fold a non-Latin script — it **erases** it. Hebrew,
+Arabic, Greek, Cyrillic and Japanese all reduced to the empty string, and the damage compounded
+because the rule had been hand-copied into three more places:
+
+| Where | What the empty key did |
+| --- | --- |
+| `similarity()` | A song scored 0.00 against its own exact match and was rejected as a mismatch. |
+| `usableLyricLines()` | Every line was dropped as unreadable, so no such song could ever clear the minimum. |
+| `lyricsQueryKey()` | *Every* non-Latin song shared one cache entry — one cached miss answered for all of them. |
+| `trackQueryKey()` | Same collision, for audio: they would all have resolved to the first one's video. And this cache is written to disk, so it outlived the session that poisoned it. |
+
+The last two are the serious ones: a cache that collides does not miss, it answers confidently
+with a different song's data. A real `.cache/resolutions.json` from development contained the
+`"|"` entry, plus `"asia engineer|"` and `"kishidan hiroshi kitadani|"` — Japanese tracks from the
+*featured* playlists, so this was never only a Hebrew problem.
+
+All four now share the one normaliser, built on `\p{L}`/`\p{N}` so every script survives, and the
+cache keys fall back to the raw text rather than an anonymous empty bucket when normalising leaves
+nothing at all. Latin keys are byte-identical to before — asserted by a test, because otherwise
+every cache entry on disk would be orphaned.
 
 ### What you can paste
 
@@ -356,6 +383,12 @@ start. Nothing in the current path touches the element.
   They're isolated and defensively parsed, but `npm run smoke` is what tells you they broke.
 - **Progress is per-session.** Stats live in memory and reset on reload — no database, no
   accounts, no daily puzzle yet.
+- **Lyrics coverage falls off outside English.** LRCLIB is community-contributed, so this is a
+  property of the catalogue rather than of the code. Sampling eight well-known Hebrew songs, it
+  had three. Where it has a song the round now plays properly; where it doesn't, the round says
+  so and offers the same playlist by ear. A title-only fallback search was tried and rejected:
+  every candidate it surfaced was a *different artist's* song of the same name, so it would have
+  quoted the wrong song's words rather than found the right ones.
 - **The waveform is only real for Spotify tracks.** Their preview MP3s are CORS-open, so the
   audio is routed through a Web Audio `AnalyserNode` and the bars are genuine RMS levels.
   YouTube audio plays inside a cross-origin iframe and cannot be read at all, so those tracks

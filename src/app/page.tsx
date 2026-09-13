@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useState } from "react";
+import type { GameMode } from "@/domain/GameMode";
 import type { Playlist } from "@/domain/entities/Playlist";
 import { GameScreen } from "@/presentation/components/GameScreen";
 import { PlaylistImportForm } from "@/presentation/components/PlaylistImportForm";
@@ -52,6 +53,25 @@ export default function HomePage() {
     }
   }, [settings]);
 
+  /**
+   * Change how the playlist on screen is played, without leaving it.
+   *
+   * The choice is remembered too: someone who gives up on lyrics for a
+   * playlist the database cannot cover means it, and should not have to make
+   * the same decision again next visit.
+   */
+  const switchMode = useCallback(
+    (mode: GameMode) => {
+      update({ mode });
+      setScreen((current) =>
+        current.name === "game"
+          ? { ...current, settings: { ...current.settings, mode } }
+          : current,
+      );
+    },
+    [update],
+  );
+
   return (
     <main
       data-source={screen.name === "game" ? screen.playlist.provider : "text"}
@@ -69,9 +89,13 @@ export default function HomePage() {
         />
       ) : (
         <GameScreen
+          // Keyed on the mode so switching it starts a clean game rather than
+          // carrying a lyrics round's ladder into an audio one.
+          key={screen.settings.mode}
           playlist={screen.playlist}
           settings={screen.settings}
           onChangePlaylist={() => setScreen(IMPORT_IDLE)}
+          onSwitchMode={switchMode}
         />
       )}
     </main>

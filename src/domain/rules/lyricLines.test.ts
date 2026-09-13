@@ -147,3 +147,41 @@ test("the skip label names the next hint, and nothing on the last try", () => {
   assert.equal(nextLyricHint(3), "another line");
   assert.equal(nextLyricHint(LYRIC_ATTEMPTS - 1), null);
 });
+
+/*
+ * Invented Hebrew lines, not a real song: this is a test of the filter, and a
+ * fixture should not carry someone's lyrics around with it.
+ */
+const HEBREW_SONG = `[פתיחה]
+♪
+הרחוב הזה מלא באור של בוקר
+אני הולך לאט ושר לעצמי
+כן
+השמיים כאן רחבים ושקטים מאוד
+הדרך הארוכה חוזרת אל הבית
+העיר מתעוררת ואני עדיין ער
+הרוח מביאה ריח של גשם ראשון
+Artist: מישהו
+`;
+
+/**
+ * The second half of the same regression as in similarity.test.ts. Every one
+ * of these lines used to be dropped as unreadable, so no non-Latin song could
+ * ever clear MIN_USABLE_LINES and lyrics mode was closed to all of them.
+ */
+test("Hebrew lines survive the filter", () => {
+  const lines = usableLyricLines(HEBREW_SONG, "שיר אחר");
+  assert.ok(
+    lines.length >= MIN_USABLE_LINES,
+    `kept ${lines.length} Hebrew lines, need ${MIN_USABLE_LINES}`,
+  );
+  // Structure, interjections and pasted credits still go.
+  assert.ok(!lines.some((line) => line.includes("[")));
+  assert.ok(!lines.some((line) => line.startsWith("Artist:")));
+  assert.ok(!lines.includes("כן"));
+});
+
+test("a Hebrew title is still treated as a spoiler", () => {
+  const lines = usableLyricLines(HEBREW_SONG, "הרחוב הזה");
+  assert.ok(!lines.some((line) => line.includes("הרחוב הזה")));
+});

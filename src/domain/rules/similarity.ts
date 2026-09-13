@@ -9,14 +9,46 @@
  * live in one pure module instead of being reinvented on each side.
  */
 
-/** Lowercase, strip accents, drop punctuation. The comparison key. */
+/**
+ * Lowercase, strip accents, drop punctuation. The comparison key.
+ *
+ * Letters and digits are kept in *any* script, not just Latin. This used to
+ * read `[^a-z0-9]+`, which silently erased every non-Latin title, artist and
+ * lyric line to the empty string - and an empty key is not a near miss, it is
+ * a guaranteed zero. A Hebrew song scored 0.00 against its own exact match in
+ * the lyrics database and was rejected as a mismatch; every one of its lines
+ * was then dropped as unreadable. The same held for Arabic, Greek, Cyrillic,
+ * Japanese and the rest.
+ *
+ * Nonspacing marks go after NFKD, which folds Latin accents as before and now
+ * also folds Hebrew niqqud and Arabic harakat - lyrics are pointed or not
+ * depending on who typed them, and the two spellings have to match.
+ *
+ * One known limitation: tokens are split on separators, so scripts that do not
+ * put spaces between words (Chinese, Japanese, Thai) reduce to a single token
+ * and score 1 or 0 rather than anything in between. That is a much smaller
+ * failure than scoring 0 always, and fixing it properly means a segmenter.
+ */
 export function normalizeKey(input: string): string {
   return input
     .toLowerCase()
     .normalize("NFKD")
-    .replace(/[̀-ͯ]/g, "")
-    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\p{Mn}+/gu, "")
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
     .trim();
+}
+
+/**
+ * One fragment of a cache key.
+ *
+ * Normalised, with the raw text as a floor: a key is an identity, and two
+ * different songs collapsing to the same one is not a weaker cache, it is a
+ * cache that hands back the wrong song's answer. Anything that normalises to
+ * nothing keeps its raw form rather than joining an anonymous bucket with
+ * everything else that did.
+ */
+export function cacheKey(value: string): string {
+  return normalizeKey(value) || value.trim().toLowerCase();
 }
 
 /** Decoration that should not decide whether two titles match. */

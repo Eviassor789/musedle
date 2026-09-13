@@ -44,13 +44,16 @@ const collapse = (s: string): string => s.replace(/\s+/g, " ").trim();
 
 /** Loose equality for matching a channel name against one half of a title. */
 function looselyEqual(a: string, b: string): boolean {
+  // Script-agnostic, like the domain's normaliser: a Latin-only filter emptied
+  // both sides for a non-Latin channel, so the comparison always said "no" and
+  // the artist and title could end up assigned the wrong way round.
   const key = (s: string) =>
     s
       .toLowerCase()
       .normalize("NFKD")
-      .replace(/[̀-ͯ]/g, "")
+      .replace(/\p{Mn}+/gu, "")
       .replace(/\b(?:the|official|vevo|music|records)\b/g, "")
-      .replace(/[^a-z0-9]/g, "");
+      .replace(/[^\p{L}\p{N}]+/gu, "");
   const ka = key(a);
   const kb = key(b);
   if (!ka || !kb) return false;

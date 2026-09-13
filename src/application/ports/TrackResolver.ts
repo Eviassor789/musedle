@@ -1,4 +1,5 @@
 import type { AudioSource } from "@/domain/entities/Track";
+import { cacheKey } from "@/domain/rules/similarity";
 
 export interface TrackQuery {
   readonly title: string;
@@ -16,14 +17,16 @@ export interface TrackResolver {
   resolve(query: TrackQuery): Promise<AudioSource | null>;
 }
 
-/** Stable cache key for a track, independent of which resolver produced it. */
+/**
+ * Stable cache key for a track, independent of which resolver produced it.
+ *
+ * Shares the domain's normaliser rather than inlining one. A hand-copy here
+ * drifted from it and kept the Latin-only `[^a-z0-9]+` rule, which meant every
+ * non-Latin track in a playlist reduced to the same empty key - so the first
+ * one resolved won the cache entry and every other Hebrew, Arabic or Japanese
+ * song in the playlist played *its* audio. This cache is written to disk, so
+ * the collision outlived the session that created it.
+ */
 export function trackQueryKey(query: TrackQuery): string {
-  const norm = (s: string) =>
-    s
-      .toLowerCase()
-      .normalize("NFKD")
-      .replace(/[\u0300-\u036f]/g, "")
-      .replace(/[^a-z0-9]+/g, " ")
-      .trim();
-  return `${norm(query.artists.join(" "))}|${norm(query.title)}`;
+  return `${cacheKey(query.artists.join(" "))}|${cacheKey(query.title)}`;
 }

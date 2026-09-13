@@ -1,4 +1,5 @@
 import type { Lyrics } from "@/domain/entities/Lyrics";
+import { cacheKey } from "@/domain/rules/similarity";
 
 export interface LyricsQuery {
   readonly title: string;
@@ -18,14 +19,15 @@ export interface LyricsProvider {
   fetch(query: LyricsQuery): Promise<Lyrics | null>;
 }
 
-/** Stable cache key; the same song must not be looked up twice. */
+/**
+ * Stable cache key; the same song must not be looked up twice.
+ *
+ * Shares the domain's normaliser rather than inlining one, for the reason
+ * spelled out on trackQueryKey: the hand-copy that used to live here erased
+ * every non-Latin script to the empty string, so one cached miss answered for
+ * every Hebrew song in a playlist - and a cached *hit* would have answered with
+ * the wrong song's words.
+ */
 export function lyricsQueryKey(query: LyricsQuery): string {
-  const norm = (value: string) =>
-    value
-      .toLowerCase()
-      .normalize("NFKD")
-      .replace(/[\u0300-\u036f]/g, "")
-      .replace(/[^a-z0-9]+/g, " ")
-      .trim();
-  return `${norm(query.artists.join(" "))}|${norm(query.title)}`;
+  return `${cacheKey(query.artists.join(" "))}|${cacheKey(query.title)}`;
 }

@@ -1,7 +1,9 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
+import type { GameMode } from "@/domain/GameMode";
 import type { Playlist } from "@/domain/entities/Playlist";
+import { trackLabel } from "@/domain/entities/Track";
 import { lyricLadder, nextLyricHint } from "@/domain/rules/LyricLadder";
 import { SnippetLadder } from "@/domain/rules/SnippetLadder";
 import { pickStartOffsetMs } from "@/domain/rules/startOffset";
@@ -25,21 +27,30 @@ interface GameScreenProps {
    */
   readonly settings: Settings;
   onChangePlaylist(): void;
+  /** Change how this playlist is played, keeping the playlist itself. */
+  onSwitchMode(mode: GameMode): void;
 }
 
 /**
  * How many songs to try before giving up on lyrics mode for a playlist.
  *
- * LRCLIB does not have everything, so the odd track has to be skipped over
- * silently. A bound stops that becoming an endless shuffle through a playlist
- * whose songs it has never heard of.
+ * LRCLIB does not have everything - its catalogue thins out sharply outside
+ * English - so the odd track has to be passed over. A bound stops that becoming
+ * an endless shuffle through a playlist whose songs it has never heard of, and
+ * when the bound is reached the round says so rather than sitting on a spinner
+ * that will never resolve.
  */
 const MAX_LYRIC_SKIPS = 8;
 
 /** Close enough to the limit that another press means "from the top". */
 const END_TOLERANCE_MS = 60;
 
-export function GameScreen({ playlist, settings, onChangePlaylist }: GameScreenProps) {
+export function GameScreen({
+  playlist,
+  settings,
+  onChangePlaylist,
+  onSwitchMode,
+}: GameScreenProps) {
   const isLyrics = settings.mode === "lyrics";
   /*
    * Each mode brings its own ladder, because each mode has its own idea of what
@@ -83,24 +94,59 @@ export function GameScreen({ playlist, settings, onChangePlaylist }: GameScreenP
     : (game.ladder.durationAtMs(game.state.attempts.length + 1) - game.unlockedMs) / 1000;
 
   /*
-   * A song with no words cannot be a lyrics round, so quietly move to the next
-   * one. This runs before the player has done anything, so nothing is lost -
-   * and NEXT_ROUND leaves the stats alone, so a skipped song is not a played
+   * A song with no words cannot be a lyrics round, so move on to the next one.
+   * This runs before the player has done anything, so nothing is lost - and
+   * NEXT_ROUND leaves the stats alone, so a passed-over song is not a played
    * round either.
+   *
+   * Kept as state rather than a counter in a ref, because the player is told
+   * about it by name: songs changing under you with no explanation reads as a
+   * bug, and after enough of them the round has to stop shuffling and say what
+   * is wrong.
    */
-  const lyricSkips = useRef(0);
+  const [skipped, setSkipped] = useState<readonly { id: string; label: string }[]>([]);
+  /*
+   * The dispatch guard, separately, in a ref. StrictMode invokes this effect
+   * twice against the same answer, and a counter in state would not have been
+   * updated yet the second time round - so two songs would be spent on one
+   * miss. Keyed by track id, which makes the whole effect idempotent.
+   */
+  const handledIds = useRef(new Set<string>());
+
   const { nextRound } = game;
+  const answerId = game.answer.id;
+  const answerLabel = trackLabel(game.answer);
+
   useEffect(() => {
     if (!isLyrics || lyrics.status !== "missing") return;
-    if (lyricSkips.current >= MAX_LYRIC_SKIPS) return;
-    lyricSkips.current += 1;
+    if (handledIds.current.has(answerId)) return;
+    if (handledIds.current.size >= MAX_LYRIC_SKIPS) return;
+
+    handledIds.current.add(answerId);
+    setSkipped((previous) => [...previous, { id: answerId, label: answerLabel }]);
     nextRound();
-  }, [isLyrics, lyrics.status, nextRound]);
+  }, [isLyrics, lyrics.status, answerId, answerLabel, nextRound]);
 
   // A fresh playlist deserves a fresh budget of attempts.
   useEffect(() => {
-    lyricSkips.current = 0;
+    handledIds.current = new Set();
+    setSkipped([]);
   }, [playlist.id]);
+
+  /*
+   * Time to stop shuffling and say so.
+   *
+   * Two ways to get here. The budget runs out on a long playlist, or - on a
+   * short one - the shuffle comes back round to a song already passed over,
+   * which means every track has been tried. Without the second test a
+   * six-song playlist with no coverage would sit on the spinner forever,
+   * having quietly run out of songs well before it ran out of budget.
+   */
+  const backToASkippedSong = skipped.some((entry) => entry.id === answerId);
+  const outOfLyrics =
+    isLyrics &&
+    lyrics.status === "missing" &&
+    (skipped.length >= MAX_LYRIC_SKIPS || backToASkippedSong);
 
   const handleSkip = (): void => {
     /*
@@ -155,11 +201,15 @@ export function GameScreen({ playlist, settings, onChangePlaylist }: GameScreenP
         press the record, then type - end up adjacent, and the attempt rows read
         as the history they are rather than as something still to fill in.
       */}
-      <AttemptList
-        attempts={game.state.attempts}
-        maxAttempts={game.ladder.maxAttempts}
-        isLive={!game.isOver}
-      />
+      {/* Nothing is being attempted once we have given up on the playlist, and
+          a row announcing otherwise is the same lie the spinner used to tell. */}
+      {!outOfLyrics && (
+        <AttemptList
+          attempts={game.state.attempts}
+          maxAttempts={game.ladder.maxAttempts}
+          isLive={!game.isOver}
+        />
+      )}
 
       {isLyrics ? (
         <LyricsDeck
@@ -167,6 +217,9 @@ export function GameScreen({ playlist, settings, onChangePlaylist }: GameScreenP
           lyrics={lyrics}
           attemptIndex={game.state.attempts.length}
           isOver={game.isOver}
+          skipped={skipped.map((entry) => entry.label)}
+          outOfLyrics={outOfLyrics}
+          onPlayByEar={() => onSwitchMode("audio")}
         />
       ) : (
         <PlayerDeck
@@ -190,6 +243,10 @@ export function GameScreen({ playlist, settings, onChangePlaylist }: GameScreenP
           shareText={game.shareText}
           onNextRound={handleNextRound}
         />
+      ) : outOfLyrics ? (
+        // The deck below has taken over with an explanation and a way out; a
+        // guess box under it would be a control with nothing to act on.
+        null
       ) : (
         <GuessInput
           tracks={playlist.tracks}
