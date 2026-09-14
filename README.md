@@ -95,9 +95,10 @@ the song — moving it would be moving a window that has already been moved, and
 sixteen of those thirty seconds, so any offset worth calling random would run the clip out of audio
 before the ladder finished. Where it does apply, the offset skips the first and last 15% of the
 track (idents and count-ins at one end, fades and dead air at the other), guarantees the whole
-16-second ladder fits before the outro, and is **seeded on the track** rather than rolled fresh: it
+16-second ladder fits before the outro, and is **seeded on the round** rather than rolled fresh: it
 is read during render, and a `Math.random` there would hand back a different answer on every
-repaint.
+repaint. See *Stable for a round, not forever* below for why the seed is the round and not the
+track.
 
 ### Lyrics mode
 
@@ -118,8 +119,8 @@ Three things had to be got right for it to be playable at all:
 - **The clues are consecutive, from a random starting point.** Each miss reads on from the last,
   so the hints build into a passage rather than three unrelated fragments. Where that passage
   begins is random, because the opening couplet of a track is both the easiest to recognise and
-  the least interesting place to start. Seeded on the track id, so a round never re-rolls its
-  clue mid-guess.
+  the least interesting place to start. Seeded on the round, so a round never re-rolls its clue
+  mid-guess — and the next play of the same song asks about a different part of it.
 - **Bad matches are filtered, not just ranked.** `/api/search` returns live bootlegs and
   "MTV Studios 1992" cuts alongside the studio take, and duration is what separates them. Some
   rows carry pasted credits where the words should be; some are timestamped `[02:16.09]` LRC
@@ -138,6 +139,23 @@ heard of. The player is told which song came up empty, because songs changing un
 no explanation reads as a bug. When the bound is reached, or the shuffle comes back round to a song
 already passed over, the round stops and says the playlist is not covered — and offers to play
 the same playlist by ear instead, which is the actual remedy rather than just the diagnosis.
+
+### Stable for a round, not forever
+
+Two things have to look random to a player and yet hold perfectly still while they are guessing:
+which lines a lyrics round quotes, and where a mid-song clip is lifted from. Both are read during
+render, so a `Math.random` in either would re-roll the clue on every repaint — the puzzle would
+move under the player mid-guess.
+
+Both were therefore seeded on the **track id**, which was stable in the right way and fixed in the
+wrong one: a song quoted the same passage and opened at the same instant in every session, forever,
+for everybody. Replaying a playlist asked the identical questions.
+
+Each round now carries a `roundSeed`, generated fresh when the round is created and seeding both.
+It is created where the random *answer* already is — in the hook — and handed to the reducer as
+plain data, so the reducer stays pure and a round remains fully described by its own state. The
+field is required rather than optional on `NEXT_ROUND`, because a caller quietly forgetting it is
+precisely the bug being fixed.
 
 ### A miss is a fact; a failure is a moment
 

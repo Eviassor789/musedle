@@ -31,6 +31,18 @@ export interface MusedleGame {
   nextRound(): void;
 }
 
+/**
+ * Fresh randomness for one round.
+ *
+ * The counterpart to `pickAnswer`: both are impure, both happen here rather
+ * than in the reducer, and both are handed to it as plain data. Anything that
+ * must look random to a player but stay put while they are guessing is seeded
+ * on this, so a round is stable without being predictable.
+ */
+function newRoundSeed(): string {
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
 /** Avoids repeating a song until the playlist has been exhausted. */
 function pickAnswer(tracks: readonly Track[], usedIds: readonly string[]): Track {
   const used = new Set(usedIds);
@@ -51,7 +63,7 @@ export function useMusedleGame(playlist: Playlist, ladder = SnippetLadder.defaul
   const [session, dispatch] = useReducer(
     sessionReducer,
     undefined,
-    () => createSession(pickAnswer(playlist.tracks, []).id, ladder),
+    () => createSession(pickAnswer(playlist.tracks, []).id, ladder, newRoundSeed()),
   );
 
   const byId = useMemo(
@@ -82,6 +94,7 @@ export function useMusedleGame(playlist: Playlist, ladder = SnippetLadder.defaul
     const pool = exhausted ? [] : [...session.usedIds, session.game.answerTrackId];
     dispatch({
       type: "NEXT_ROUND",
+      roundSeed: newRoundSeed(),
       answerId: pickAnswer(playlist.tracks, pool).id,
       resetUsed: exhausted,
     });

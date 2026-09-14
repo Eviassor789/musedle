@@ -18,6 +18,20 @@ export interface GameState {
   readonly ladder: SnippetLadder;
   readonly attempts: readonly Attempt[];
   readonly status: GameStatus;
+  /**
+   * Distinguishes this round from every other round of the same song.
+   *
+   * Anything that has to look random but must not move while a round is being
+   * played - which lines a lyrics round quotes, and where its clip is lifted
+   * from - is seeded on this rather than on the track. Seeding on the track
+   * alone was stable in the right way and fixed in the wrong one: the same song
+   * quoted the same passage forever, in every session, for everybody.
+   *
+   * Generated when the round is created and then left alone, so re-renders
+   * cannot re-roll it, and it lives in the state rather than a ref so the
+   * reducer stays the single source of truth for what a round is.
+   */
+  readonly roundSeed: string;
 }
 
 export type GameAction =
@@ -29,8 +43,12 @@ export type GameAction =
       readonly artistMatch: boolean;
     };
 
-export function createGame(answerTrackId: string, ladder = SnippetLadder.default()): GameState {
-  return { answerTrackId, ladder, attempts: [], status: "in_progress" };
+export function createGame(
+  answerTrackId: string,
+  ladder = SnippetLadder.default(),
+  roundSeed = "",
+): GameState {
+  return { answerTrackId, ladder, attempts: [], status: "in_progress", roundSeed };
 }
 
 /**

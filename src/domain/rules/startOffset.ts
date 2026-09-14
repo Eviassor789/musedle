@@ -21,7 +21,7 @@ import { seededRandom } from "./seededRandom";
 const INTRO_SHARE = 0.15;
 const OUTRO_SHARE = 0.15;
 
-export function pickStartOffsetMs(track: Track, spanMs: number): number {
+export function pickStartOffsetMs(track: Track, spanMs: number, roundSeed: string): number {
   /*
    * Only YouTube-backed tracks can move.
    *
@@ -43,13 +43,15 @@ export function pickStartOffsetMs(track: Track, spanMs: number): number {
   if (latest <= earliest) return 0;
 
   /*
-   * Seeded on the track rather than rolled fresh.
+   * Seeded, not rolled fresh - but seeded on the *round*, not the track.
    *
-   * A round is a puzzle, and a puzzle that moves under you is not one: this is
+   * A round is a puzzle and a puzzle that moves under you is not one: this is
    * read during render, and a Math.random here would hand back a different
-   * answer on every repaint. Seeding also means the same song always opens in
-   * the same place, so two people comparing scores played the same clue.
+   * answer on every repaint. The seed has to hold still for exactly as long as
+   * the round lasts and no longer, though. Seeded on the track alone, as it
+   * was, a song opened at the same instant in every session forever, so playing
+   * a playlist twice asked the identical question twice.
    */
-  const random = seededRandom(`start:${track.id}`);
+  const random = seededRandom(`start:${track.id}:${roundSeed}`);
   return Math.round(earliest + random() * (latest - earliest));
 }

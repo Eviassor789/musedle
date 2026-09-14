@@ -14,6 +14,8 @@ interface LyricsDeckProps {
   readonly attemptIndex: number;
   /** A finished round shows everything, win or lose. */
   readonly isOver: boolean;
+  /** This round's randomness, so the passage differs between plays. */
+  readonly roundSeed: string;
   /** Songs passed over for having no usable words, most recent last. */
   readonly skipped: readonly string[];
   /** Too many in a row: this playlist is not going to work in lyrics mode. */
@@ -34,6 +36,7 @@ export function LyricsDeck({
   lyrics,
   attemptIndex,
   isOver,
+  roundSeed,
   skipped,
   outOfLyrics,
   onPlayByEar,
@@ -41,15 +44,18 @@ export function LyricsDeck({
   const words = lyrics.status === "ready" ? lyrics.lyrics : null;
 
   /*
-   * Chosen once per song, not per render.
+   * Chosen once per round, not per render and not per song.
    *
-   * Seeded on the track id so the same round always quotes the same lines -
-   * re-rolling them on every repaint would make the clue shift under the
-   * player mid-guess.
+   * The seed has to hold still while someone is guessing - re-rolling it on
+   * every repaint would shift the clue under them mid-round - but it must not
+   * hold still any longer than that. Seeded on the track id alone, as it was,
+   * a song quoted the same passage in every session forever; the round seed is
+   * fresh each time the round begins, so playing a playlist twice asks you
+   * about a different part of the song.
    */
   const chosenLines = useMemo(
-    () => (words ? pickLyricLines(words.lines, MAX_LYRIC_LINES, answer.id) : []),
-    [words, answer.id],
+    () => (words ? pickLyricLines(words.lines, MAX_LYRIC_LINES, `${answer.id}:${roundSeed}`) : []),
+    [words, answer.id, roundSeed],
   );
 
   /*

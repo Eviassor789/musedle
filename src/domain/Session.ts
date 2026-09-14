@@ -33,12 +33,23 @@ export type SessionAction =
   | {
       readonly type: "NEXT_ROUND";
       readonly answerId: string;
+      /**
+       * Fresh randomness for the round being started. Supplied by the caller
+       * for the same reason `answerId` is: the reducer stays pure, and every
+       * unpredictable thing about a round arrives as data rather than being
+       * conjured inside it.
+       */
+      readonly roundSeed: string;
       /** Set when the playlist has been exhausted and the cycle starts over. */
       readonly resetUsed?: boolean;
     };
 
-export function createSession(answerId: string, ladder: SnippetLadder): SessionState {
-  return { game: createGame(answerId, ladder), stats: EMPTY_STATS, usedIds: [] };
+export function createSession(
+  answerId: string,
+  ladder: SnippetLadder,
+  roundSeed = "",
+): SessionState {
+  return { game: createGame(answerId, ladder, roundSeed), stats: EMPTY_STATS, usedIds: [] };
 }
 
 function recordResult(stats: SessionStats, won: boolean): SessionStats {
@@ -61,7 +72,7 @@ export function sessionReducer(state: SessionState, action: SessionAction): Sess
         : [...state.usedIds, previousAnswer];
 
     return {
-      game: createGame(action.answerId, state.game.ladder),
+      game: createGame(action.answerId, state.game.ladder, action.roundSeed),
       stats: state.stats,
       usedIds,
     };

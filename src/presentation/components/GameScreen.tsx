@@ -74,7 +74,7 @@ export function GameScreen({
    * without needing to be memoised or kept in state.
    */
   const startOffsetMs = settings.randomStart
-    ? pickStartOffsetMs(game.answer, game.ladder.maxDurationMs)
+    ? pickStartOffsetMs(game.answer, game.ladder.maxDurationMs, game.state.roundSeed)
     : 0;
 
   /*
@@ -217,6 +217,7 @@ export function GameScreen({
           lyrics={lyrics}
           attemptIndex={game.state.attempts.length}
           isOver={game.isOver}
+          roundSeed={game.state.roundSeed}
           skipped={skipped.map((entry) => entry.label)}
           outOfLyrics={outOfLyrics}
           onPlayByEar={() => onSwitchMode("audio")}
