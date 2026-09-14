@@ -30,6 +30,15 @@ const MAX_DURATION_DRIFT_MS = 15_000;
 const MIN_CONFIDENCE = 0.5;
 
 /**
+ * How close a title must be before an artist-blind row is even considered,
+ * and how tightly the recording's length must then agree.
+ *
+ * See `byTitleAlone` for why the second number is doing all the work.
+ */
+const FALLBACK_TITLE_SIMILARITY = 0.9;
+const FALLBACK_DRIFT_MS = 7_000;
+
+/**
  * Album names that are not the song's actual album.
  *
  * LRCLIB rows frequently credit a chart compilation or a live recording rather
@@ -98,23 +107,74 @@ export class LrcLibProvider implements LyricsProvider {
   constructor(private readonly fetchImpl: typeof fetch = fetch) {}
 
   async fetch(query: LyricsQuery): Promise<Lyrics | null> {
-    const rows = await this.search(query);
-    if (rows.length === 0) return null;
-
     // Ranked best-first, but a high score is no guarantee the row's lyrics
     // survive cleaning - so walk down until one actually yields a round.
-    for (const row of this.rank(rows, query)) {
+    for (const row of this.rank(await this.search(query), query)) {
+      const lyrics = this.toLyrics(row, query.title);
+      if (lyrics) return lyrics;
+    }
+
+    for (const row of await this.byTitleAlone(query)) {
       const lyrics = this.toLyrics(row, query.title);
       if (lyrics) return lyrics;
     }
     return null;
   }
 
-  private async search(query: LyricsQuery): Promise<LrcLibRow[]> {
-    const params = new URLSearchParams({
+  /**
+   * Last resort: the same title, ignoring who it is credited to.
+   *
+   * The two catalogues routinely disagree about which *script* an artist's
+   * name is written in. LRCLIB credits "Danny Robas" where the playlist says
+   * "דני רובס", and "גידי גוב" where the playlist says "Gidi Gov" - the
+   * mismatch runs in both directions, neither side is wrong, and nothing short
+   * of transliteration can match one to the other. So the artist is set aside.
+   *
+   * That is only safe because duration takes over the job. Matching on title
+   * alone is exactly how you end up quoting a different singer's song of the
+   * same name - three separate Israeli artists have a song called בלעדייך - so
+   * a row is taken only when the title is all but identical *and* the recording
+   * is within a few seconds of the one in the playlist. Two different songs
+   * sharing a title and a running time is rare; one of them being the first
+   * result is rarer still, and the closest length wins regardless.
+   *
+   * With no duration to check against there is no fallback at all. A guess
+   * here is worse than a miss: a miss moves to the next song, while a wrong
+   * match spends a player's whole round on clues from a song that was never in
+   * the playlist.
+   */
+  private async byTitleAlone(query: LyricsQuery): Promise<LrcLibRow[]> {
+    const wantedMs = query.durationMs;
+    if (wantedMs === null) return [];
+
+    const rows = await this.request({ track_name: query.title });
+
+    return rows
+      .map((row) => ({
+        row,
+        driftMs:
+          typeof row.duration === "number"
+            ? Math.abs(row.duration * 1000 - wantedMs)
+            : Number.POSITIVE_INFINITY,
+      }))
+      .filter(
+        ({ row, driftMs }) =>
+          driftMs <= FALLBACK_DRIFT_MS &&
+          similarity(asString(row.trackName) ?? "", query.title) >= FALLBACK_TITLE_SIMILARITY,
+      )
+      .sort((a, b) => a.driftMs - b.driftMs)
+      .map(({ row }) => row);
+  }
+
+  private search(query: LyricsQuery): Promise<LrcLibRow[]> {
+    return this.request({
       track_name: query.title,
       artist_name: query.artists.join(" "),
     });
+  }
+
+  private async request(fields: Record<string, string>): Promise<LrcLibRow[]> {
+    const params = new URLSearchParams(fields);
 
     try {
       const response = await this.fetchImpl(`${ENDPOINT}/search?${params}`, {

@@ -40,6 +40,52 @@ const SEPARATORS = [" -- ", " — ", " – ", " - ", " | ", " ｜ ", " : "];
 /** YouTube's auto-generated per-artist channels are named "Artist - Topic". */
 const TOPIC_SUFFIX = /\s*-\s*topic\s*$/i;
 
+/**
+ * What a channel calls itself on top of the artist's actual name.
+ *
+ * A channel is not a credit: "אריק סיני הערוץ הרשמי Aric Sinai Official" is one
+ * artist wearing three extra words, and those words are what stop a lyrics
+ * lookup matching the plain "אריק סיני" the database has. Stripping them also
+ * tends to leave *both* spellings of the name in place, which is exactly what
+ * is wanted when the two catalogues disagree about which script to use.
+ */
+const CHANNEL_NOISE = /\b(?:official|officiel|oficial|channel)\b/gi;
+
+/**
+ * VEVO gets its own rule because it is usually glued straight onto the name -
+ * "ArianaGrandeVEVO" - where a word boundary never fires.
+ */
+const VEVO_SUFFIX = /\s*vevo\s*$/i;
+
+/** The same, in Hebrew: "the official channel" / "official channel". */
+const CHANNEL_NOISE_HE = /ה?ערוץ\s+ה?רשמי/g;
+
+/** Scripts that are not Latin, for spotting a bilingual restatement. */
+const NON_LATIN =
+  /[\p{Script=Hebrew}\p{Script=Arabic}\p{Script=Cyrillic}\p{Script=Greek}\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}\p{Script=Thai}\p{Script=Devanagari}]/u;
+
+/**
+ * Drops a translated restatement of the title after a pipe.
+ *
+ * Uploaders outside the Anglosphere routinely title a video in both languages:
+ * "הגיבן הקדוש | Aaron Razel - The Holy Hunchback". Carried into the track's
+ * title, the tail wrecks every lookup and reads badly in the guess list.
+ *
+ * Only dropped when the two halves are in *different scripts*, which is what
+ * distinguishes a restatement from a qualifier that genuinely changes the song.
+ * "Song | Live at Wembley" is all Latin, so it survives untouched.
+ */
+function dropBilingualTail(title: string): string {
+  const at = title.indexOf(" | ");
+  if (at <= 0) return title;
+
+  const head = title.slice(0, at);
+  const tail = title.slice(at + 3);
+  if (!head.trim() || !tail.trim()) return title;
+
+  return NON_LATIN.test(head) === NON_LATIN.test(tail) ? title : collapse(head);
+}
+
 const collapse = (s: string): string => s.replace(/\s+/g, " ").trim();
 
 /** Loose equality for matching a channel name against one half of a title. */
@@ -62,7 +108,13 @@ function looselyEqual(a: string, b: string): boolean {
 
 export function cleanChannelName(channel: string | null): string | null {
   if (!channel) return null;
-  const cleaned = collapse(channel.replace(TOPIC_SUFFIX, "").replace(/\s*VEVO\s*$/i, ""));
+  const cleaned = collapse(
+    channel
+      .replace(TOPIC_SUFFIX, "")
+      .replace(CHANNEL_NOISE_HE, " ")
+      .replace(CHANNEL_NOISE, " ")
+      .replace(VEVO_SUFFIX, ""),
+  );
   return cleaned || null;
 }
 
@@ -98,7 +150,10 @@ export function normalizeVideoTitle(
   const parts = splitOnSeparator(cleaned);
   if (!parts) {
     // No separator: the whole string is the song, the channel is the artist.
-    return { title: cleaned || collapse(rawTitle), artists: channel ? [channel] : [] };
+    return {
+      title: dropBilingualTail(cleaned || collapse(rawTitle)),
+      artists: channel ? [channel] : [],
+    };
   }
 
   const [left, right] = parts;
@@ -106,14 +161,14 @@ export function normalizeVideoTitle(
   // The channel tells us which half is the artist. Uploaders use both orders,
   // so matching beats assuming.
   if (channel && looselyEqual(channel, right) && !looselyEqual(channel, left)) {
-    return { title: left, artists: splitArtistCredit(right) };
+    return { title: dropBilingualTail(left), artists: splitArtistCredit(right) };
   }
   if (channel && looselyEqual(channel, left)) {
-    return { title: right, artists: splitArtistCredit(left) };
+    return { title: dropBilingualTail(right), artists: splitArtistCredit(left) };
   }
 
   // Unknown channel: "Artist - Title" is overwhelmingly the convention.
-  return { title: right, artists: splitArtistCredit(left) };
+  return { title: dropBilingualTail(right), artists: splitArtistCredit(left) };
 }
 
 /** Parses YouTube's "3:08" / "1:02:33" duration badges into milliseconds. */

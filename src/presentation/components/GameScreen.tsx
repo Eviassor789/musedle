@@ -40,7 +40,7 @@ interface GameScreenProps {
  * when the bound is reached the round says so rather than sitting on a spinner
  * that will never resolve.
  */
-const MAX_LYRIC_SKIPS = 8;
+const MAX_LYRIC_SKIPS = 20;
 
 /** Close enough to the limit that another press means "from the top". */
 const END_TOLERANCE_MS = 60;

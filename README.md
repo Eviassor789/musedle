@@ -132,12 +132,39 @@ Single_Jahres", "Rap Hip hop Selecta". Those are penalised in ranking and withhe
 anyway, because a hint naming the wrong album is worse than no hint. When the album is withheld
 that rung spends itself on an extra lyric line instead, so **every miss still pays out something**.
 
-A track with no usable words is passed over for another, up to a bound — LRCLIB does not have
-everything, and an unbounded search would shuffle forever through a playlist it has never heard
-of. The player is told which song came up empty, because songs changing underneath you with no
-explanation reads as a bug. When the bound is reached, or the shuffle comes back round to a song
+A track with no usable words is passed over for another, up to a bound of twenty — LRCLIB does not
+have everything, and an unbounded search would shuffle forever through a playlist it has never
+heard of. The player is told which song came up empty, because songs changing underneath you with
+no explanation reads as a bug. When the bound is reached, or the shuffle comes back round to a song
 already passed over, the round stops and says the playlist is not covered — and offers to play
 the same playlist by ear instead, which is the actual remedy rather than just the diagnosis.
+
+### When the two catalogues spell a name differently
+
+Fixing the normaliser was necessary but not sufficient. The playlist and the lyrics database
+routinely disagree about which **script** an artist's name is written in, and the disagreement
+runs both ways: LRCLIB credits `Danny Robas` where the playlist says `דני רובס`, and `גידי גוב`
+where the playlist says `Gidi Gov`. Neither side is wrong and nothing short of transliteration
+can match one to the other, so the structured search returns zero rows for a song the database
+plainly has.
+
+So there is a fallback that searches on title alone and ignores the credit entirely — gated hard,
+because matching on title alone is precisely how you quote the wrong singer's song. *Three*
+separate Israeli artists have a song called `בלעדייך`. The gate is duration: a row is taken only
+when the title is all but identical **and** the recording is within seven seconds of the one in
+the playlist, closest length first. With no duration to check against there is no fallback at all
+— a wrong match is worse than a miss, because a miss moves to the next song while a wrong match
+spends a player's whole round on clues from a song that was never in the playlist.
+
+Two more things were mangling the query before it was ever sent, both from YouTube metadata:
+
+- **A channel is not a credit.** `אריק סיני הערוץ הרשמי Aric Sinai Official` is one artist wearing
+  three extra words. Stripping them leaves `אריק סיני Aric Sinai` — and note that *both* spellings
+  survive, which is exactly what you want when you cannot transliterate between them.
+- **Bilingual titles.** `הגיבן הקדוש | Aaron Razel - The Holy Hunchback` is one song named twice.
+  The tail after the pipe is dropped only when the two halves are in **different scripts**, which
+  is what distinguishes a restatement from a qualifier: `Bohemian Rhapsody | Live at Wembley` is
+  all Latin and survives untouched.
 
 ### One normaliser, not four
 

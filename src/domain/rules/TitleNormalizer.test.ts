@@ -83,3 +83,27 @@ test("strips brackets only when every word inside is noise", () => {
   assert.equal(normalizeVideoTitle("Deadmau5 - Strobe (Original Mix)", "Deadmau5").title, "Strobe (Original Mix)");
   assert.equal(normalizeVideoTitle("Nirvana - Come As You Are (Live At Reading)", "Nirvana").title, "Come As You Are (Live At Reading)");
 });
+
+test("strips what a channel calls itself, in either language", () => {
+  // A real channel name that stopped a lyrics lookup matching "אריק סיני".
+  assert.equal(
+    cleanChannelName("אריק סיני הערוץ הרשמי Aric Sinai Official"),
+    "אריק סיני Aric Sinai",
+  );
+  assert.equal(cleanChannelName("Coldplay Official Channel"), "Coldplay");
+  // Both spellings survive, which is the point: the lyrics database may hold
+  // either one, and nothing here can transliterate between them.
+  assert.ok(cleanChannelName("אריק סיני Aric Sinai Official")?.includes("אריק"));
+});
+
+test("drops a translated restatement of the title after a pipe", () => {
+  const r = normalizeVideoTitle("אהרן רזאל - הגיבן הקדוש | Aaron Razel - The Holy Hunchback", null);
+  assert.equal(r.title, "הגיבן הקדוש");
+  assert.deepEqual(r.artists, ["אהרן רזאל"]);
+});
+
+test("a same-script tail after a pipe is not a restatement", () => {
+  // "Live at Wembley" changes what the recording is; it has to survive.
+  const r = normalizeVideoTitle("Queen - Bohemian Rhapsody | Live at Wembley", null);
+  assert.equal(r.title, "Bohemian Rhapsody | Live at Wembley");
+});
