@@ -153,3 +153,47 @@ test("the fallback never displaces a proper artist match", async () => {
   });
   assert.ok(lyrics);
 });
+
+/**
+ * The failure that made an Earth, Wind & Fire track look like it had no words.
+ * "LRCLIB has no such song" and "we could not ask LRCLIB" must not be the same
+ * outcome, because the cache above remembers one of them forever.
+ */
+test("a transport failure is raised, not reported as an absent song", async () => {
+  const provider = new LrcLibProvider((async () => ({
+    ok: false,
+    status: 503,
+    json: async () => [],
+  })) as unknown as typeof fetch);
+
+  await assert.rejects(() =>
+    provider.fetch({ title: "After The Love Has Gone", artists: ["Earth", "Wind", "Fire"], durationMs: null }),
+  );
+});
+
+/**
+ * Several different recordings of the same title, with the credit set aside,
+ * cannot be told apart - so none of them is taken.
+ */
+test("the fallback refuses when candidates are different lengths", async () => {
+  const provider = new LrcLibProvider(
+    stubFetch({
+      structured: [],
+      byTitle: [row("בלעדייך", "One Singer", 228), row("בלעדייך", "Another Singer", 245)],
+    }),
+  );
+  const lyrics = await provider.fetch({ title: "בלעדייך", artists: ["Gidi Gov"], durationMs: 230_000 });
+  assert.equal(lyrics, null);
+});
+
+/** The same recording submitted twice is not ambiguous, whoever it is filed under. */
+test("the fallback accepts duplicate submissions of one recording", async () => {
+  const provider = new LrcLibProvider(
+    stubFetch({
+      structured: [],
+      byTitle: [row("דרך הכורכר", "אריק סיני", 272), row("דרך הכורכר", "Arik Sinai", 271)],
+    }),
+  );
+  const lyrics = await provider.fetch({ title: "דרך הכורכר", artists: ["Arik Sinai"], durationMs: 285_000 });
+  assert.ok(lyrics, "two spellings of one artist, one recording - should match");
+});

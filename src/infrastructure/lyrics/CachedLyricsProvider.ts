@@ -26,8 +26,21 @@ export class CachedLyricsProvider implements LyricsProvider {
     const lookup = this.inner
       .fetch(query)
       .then((lyrics) => {
+        // Only a real answer is remembered. A hit is permanent because the
+        // words to a song do not change, and a *miss* is permanent because
+        // LRCLIB having never heard of a track is equally durable.
         this.entries.set(key, lyrics);
         return lyrics;
+      })
+      .catch(() => {
+        /*
+         * We could not ask. Emphatically not cached: a blip, a rate-limited
+         * burst or a dev server reloading mid-edit would otherwise turn an
+         * ordinary song into a permanent miss for the life of the process -
+         * and the round would go on reporting "no lyrics" for a track whose
+         * words are sitting right there. The next encounter asks again.
+         */
+        return null;
       })
       .finally(() => {
         this.pending.delete(key);

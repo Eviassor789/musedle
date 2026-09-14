@@ -20,6 +20,15 @@ import { similarity } from "@/domain/rules/similarity";
 
 const ENDPOINT = "https://lrclib.net/api";
 
+/**
+ * We could not ask - as distinct from LRCLIB answering "no such song".
+ *
+ * The difference matters entirely to the cache: one is a fact about a song and
+ * worth remembering forever, the other is a fact about a moment and must not
+ * outlive it.
+ */
+export class LyricsUnavailableError extends Error {}
+
 /** LRCLIB asks its clients to identify themselves. */
 const USER_AGENT = "Musedle/0.1 (https://github.com/musedle/musedle)";
 
@@ -36,7 +45,26 @@ const MIN_CONFIDENCE = 0.5;
  * See `byTitleAlone` for why the second number is doing all the work.
  */
 const FALLBACK_TITLE_SIMILARITY = 0.9;
-const FALLBACK_DRIFT_MS = 7_000;
+
+/**
+ * A YouTube playlist reports the length of the *video*, not of the recording:
+ * sampled against the database, the same songs differ by up to twenty seconds
+ * once idents, intros and dead air at the end are counted. Seven seconds only
+ * ever matched a Spotify-sourced playlist.
+ */
+const FALLBACK_DRIFT_MS = 20_000;
+
+/**
+ * How far apart the surviving candidates may be from *each other*.
+ *
+ * This is what replaces the artist check. Rows within a second or two of the
+ * same length are the same recording submitted more than once, so it does not
+ * matter which is taken - but rows of visibly different lengths are different
+ * recordings, and with the credit set aside there is nothing left to tell them
+ * apart. Six artists have a song called בלעדייך; when several of them land in
+ * the window, the honest answer is to refuse rather than guess.
+ */
+const FALLBACK_SPREAD_MS = 8_000;
 
 /**
  * Album names that are not the song's actual album.
@@ -149,7 +177,7 @@ export class LrcLibProvider implements LyricsProvider {
 
     const rows = await this.request({ track_name: query.title });
 
-    return rows
+    const survivors = rows
       .map((row) => ({
         row,
         driftMs:
@@ -162,8 +190,16 @@ export class LrcLibProvider implements LyricsProvider {
           driftMs <= FALLBACK_DRIFT_MS &&
           similarity(asString(row.trackName) ?? "", query.title) >= FALLBACK_TITLE_SIMILARITY,
       )
-      .sort((a, b) => a.driftMs - b.driftMs)
-      .map(({ row }) => row);
+      .sort((a, b) => a.driftMs - b.driftMs);
+
+    if (survivors.length === 0) return [];
+
+    // All one recording, or several different ones? See FALLBACK_SPREAD_MS.
+    const lengths = survivors.map(({ row }) => (row.duration as number) * 1000);
+    const spreadMs = Math.max(...lengths) - Math.min(...lengths);
+    if (spreadMs > FALLBACK_SPREAD_MS) return [];
+
+    return survivors.map(({ row }) => row);
   }
 
   private search(query: LyricsQuery): Promise<LrcLibRow[]> {
@@ -173,23 +209,33 @@ export class LrcLibProvider implements LyricsProvider {
     });
   }
 
+  /**
+   * One search, which either answers or fails loudly.
+   *
+   * Deliberately *not* swallowing transport errors into an empty list. "LRCLIB
+   * has no such song" and "we could not ask LRCLIB" look identical to the
+   * caller if both come back empty, and the result gets cached forever - so a
+   * single blip, a rate-limited burst, or a dev server reloading mid-edit turns
+   * a perfectly ordinary song into a permanent miss for the life of the
+   * process. That is the failure that made an Earth, Wind & Fire track look
+   * like it had no lyrics. Throwing keeps the two outcomes distinguishable, and
+   * the cache above only remembers real answers.
+   */
   private async request(fields: Record<string, string>): Promise<LrcLibRow[]> {
     const params = new URLSearchParams(fields);
 
-    try {
-      const response = await this.fetchImpl(`${ENDPOINT}/search?${params}`, {
-        headers: { "User-Agent": USER_AGENT, Accept: "application/json" },
-        // The words to a song do not change; let the platform cache hard.
-        next: { revalidate: 60 * 60 * 24 * 7 },
-      } as RequestInit);
+    const response = await this.fetchImpl(`${ENDPOINT}/search?${params}`, {
+      headers: { "User-Agent": USER_AGENT, Accept: "application/json" },
+      // The words to a song do not change; let the platform cache hard.
+      next: { revalidate: 60 * 60 * 24 * 7 },
+    } as RequestInit);
 
-      if (!response.ok) return [];
-      const payload: unknown = await response.json();
-      return Array.isArray(payload) ? (payload as LrcLibRow[]) : [];
-    } catch {
-      // Offline or rate-limited: the caller moves on to another song.
-      return [];
+    if (!response.ok) {
+      throw new LyricsUnavailableError(`LRCLIB answered ${response.status}.`);
     }
+
+    const payload: unknown = await response.json();
+    return Array.isArray(payload) ? (payload as LrcLibRow[]) : [];
   }
 
   /** Best match first. Text similarity opens, duration decides. */

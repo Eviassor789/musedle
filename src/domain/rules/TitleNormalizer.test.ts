@@ -107,3 +107,27 @@ test("a same-script tail after a pipe is not a restatement", () => {
   const r = normalizeVideoTitle("Queen - Bohemian Rhapsody | Live at Wembley", null);
   assert.equal(r.title, "Bohemian Rhapsody | Live at Wembley");
 });
+
+test("drops the artist's own name echoed into the title", () => {
+  const r = normalizeVideoTitle("אריק איינשטיין כמה טוב שבאת הביתה Arik Einstein", "אריק איינשטיין I פונוקול");
+  assert.equal(r.title, "כמה טוב שבאת הביתה");
+});
+
+test("drops a transliterated run at either end of the title", () => {
+  assert.equal(normalizeVideoTitle("אהרן רזאל - Aaron Razel - אהבתי את ההתחלה", null).title, "אהבתי את ההתחלה");
+});
+
+test("a title written entirely in one script is never trimmed", () => {
+  assert.equal(normalizeVideoTitle("Earth, Wind & Fire - After The Love Has Gone", null).title, "After The Love Has Gone");
+  assert.equal(normalizeVideoTitle("Linkin Park - Numb (Official Music Video)", null).title, "Numb");
+});
+
+test("a band and its song sharing a name survives", () => {
+  const r = normalizeVideoTitle("Black Sabbath - Black Sabbath", null);
+  assert.equal(r.title, "Black Sabbath");
+});
+
+test("strips Hebrew video labels the English list never caught", () => {
+  assert.equal(normalizeVideoTitle("הדורבנים - עוד לילה - קליפ", null).title, "עוד לילה");
+  assert.equal(normalizeVideoTitle("הדורבנים - לא פוגע - הקליפ הרשמי", null).title, "לא פוגע");
+});

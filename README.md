@@ -139,6 +139,22 @@ no explanation reads as a bug. When the bound is reached, or the shuffle comes b
 already passed over, the round stops and says the playlist is not covered — and offers to play
 the same playlist by ear instead, which is the actual remedy rather than just the diagnosis.
 
+### A miss is a fact; a failure is a moment
+
+The lyrics cache remembers both hits and misses forever, and rightly so — the words to a song do
+not change, and LRCLIB having never heard of a track is equally durable. But the adapter used to
+swallow *every* failure into an empty result: a 503, a rate-limited burst, a dev server reloading
+mid-edit. Those came back indistinguishable from "no such song" and were cached with the same
+permanence, so one blip turned an ordinary track into a permanent miss for the life of the
+process. That is how an Earth, Wind & Fire song ended up reported as having no lyrics.
+
+The adapter now throws `LyricsUnavailableError` rather than returning nothing, and the cache
+stores only real answers. A failure is retried the next time the song comes round.
+
+Worth knowing while developing: the cache is held on `globalThis` so that Next's module reloading
+does not discard it on every edit, which also means **a poisoned entry survives every edit and
+only clears when the process restarts.**
+
 ### When the two catalogues spell a name differently
 
 Fixing the normaliser was necessary but not sufficient. The playlist and the lyrics database
@@ -156,7 +172,15 @@ the playlist, closest length first. With no duration to check against there is n
 — a wrong match is worse than a miss, because a miss moves to the next song while a wrong match
 spends a player's whole round on clues from a song that was never in the playlist.
 
-Two more things were mangling the query before it was ever sent, both from YouTube metadata:
+The duration window is **twenty** seconds, not seven, because a YouTube playlist reports the
+length of the *video*: sampled against the database, the same songs differ by up to twenty seconds
+once idents and dead air are counted. Widening it needed a second guard, so the surviving
+candidates must also agree with *each other* to within eight seconds. Rows of the same length are
+one recording submitted more than once and it does not matter which is taken; rows of visibly
+different lengths are different recordings, and with the credit set aside there is nothing left to
+tell them apart.
+
+Four more things were mangling the query before it was ever sent, all from YouTube metadata:
 
 - **A channel is not a credit.** `אריק סיני הערוץ הרשמי Aric Sinai Official` is one artist wearing
   three extra words. Stripping them leaves `אריק סיני Aric Sinai` — and note that *both* spellings
@@ -165,6 +189,16 @@ Two more things were mangling the query before it was ever sent, both from YouTu
   The tail after the pipe is dropped only when the two halves are in **different scripts**, which
   is what distinguishes a restatement from a qualifier: `Bohemian Rhapsody | Live at Wembley` is
   all Latin and survives untouched.
+- **The artist echoed into the title.** A channel repeating itself turns a song into
+  `אריק איינשטיין כמה טוב שבאת הביתה` — a name no database holds. Leading and trailing runs of
+  words already in the credit are dropped; a credit in the *middle* of a title is usually a real
+  collaboration, and if the trim would empty the title the original is kept, because a band and
+  its song do sometimes share a name.
+- **Transliterated runs at either end**, the same restatement habit without the pipe. Which script
+  the song belongs to is decided by weight of words rather than by whichever comes first — the
+  transliteration is as often at the front (`Aaron Razel - אהבתי את ההתחלה`) as at the back.
+- **Video labels in the language the title was written in.** The noise list was English-only, so
+  `לא פוגע - הקליפ הרשמי` kept "the official clip" as part of the song's name.
 
 ### One normaliser, not four
 

@@ -8,6 +8,8 @@
  * against real-world examples without touching anything else.
  */
 
+import { normalizeKey } from "./similarity";
+
 export interface NormalizedTitle {
   readonly title: string;
   readonly artists: readonly string[];
@@ -33,6 +35,16 @@ const NOISE_IN_BRACKETS = new RegExp(
 /** The same noise as a trailing suffix without brackets: "... | Official Video". */
 const NOISE_SUFFIX =
   /\s*[|\-–—]\s*(?:official\s*(?:music\s*)?(?:video|audio)|lyric(?:s)?(?:\s*video)?|visuali[sz]er)\s*$/gi;
+
+/**
+ * The same, in Hebrew: "... - קליפ", "... - הקליפ הרשמי".
+ *
+ * Uploaders label a video in the language they wrote the title in, and an
+ * English-only noise list leaves "לא פוגע - הקליפ הרשמי" believing "the
+ * official clip" is part of the song's name. Nothing then matches it.
+ */
+const NOISE_SUFFIX_HE =
+  /\s*[|\-–—]\s*(?:ה?קליפ(?:\s+ה?רשמי)?|ה?וידאו(?:\s+ה?רשמי)?|ה?רשמי)\s*$/g;
 
 /** Separators uploaders use between artist and title, longest first. */
 const SEPARATORS = [" -- ", " — ", " – ", " - ", " | ", " ｜ ", " : "];
@@ -63,6 +75,75 @@ const CHANNEL_NOISE_HE = /ה?ערוץ\s+ה?רשמי/g;
 /** Scripts that are not Latin, for spotting a bilingual restatement. */
 const NON_LATIN =
   /[\p{Script=Hebrew}\p{Script=Arabic}\p{Script=Cyrillic}\p{Script=Greek}\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}\p{Script=Thai}\p{Script=Devanagari}]/u;
+
+/**
+ * Drops the artist's own name from the ends of the title.
+ *
+ * "אריק איינשטיין כמה טוב שבאת הביתה" is a channel repeating itself: the credit
+ * is already in the artist field, and leaving it in the title means searching a
+ * lyrics database for a song name that does not exist. Only leading and
+ * trailing runs are removed - a credit in the *middle* of a title is usually a
+ * genuine collaboration - and if that would empty the title the original is
+ * kept, because a band and its song do sometimes share a name.
+ */
+function dropArtistEcho(title: string, artists: readonly string[]): string {
+  const credit = new Set(normalizeKey(artists.join(" ")).split(" ").filter(Boolean));
+  if (credit.size === 0) return title;
+
+  const words = title.split(/\s+/).filter(Boolean);
+  const isEcho = (word: string): boolean => {
+    const key = normalizeKey(word);
+    return key.length > 0 && credit.has(key);
+  };
+
+  let start = 0;
+  let end = words.length;
+  while (start < end && isEcho(words[start]!)) start++;
+  while (end > start && isEcho(words[end - 1]!)) end--;
+
+  const kept = words.slice(start, end).join(" ");
+  return kept.length > 0 ? kept : title;
+}
+
+/**
+ * Drops a run of words written in another script from either end.
+ *
+ * The same restatement habit as the pipe case, without the pipe: "כמה טוב שבאת
+ * הביתה Arik Einstein" ends with the artist's name transliterated for search
+ * engines, and "Aaron Razel - אהבתי את ההתחלה" opens with it.
+ *
+ * Which script is the song's is decided by weight of words rather than by
+ * whichever happens to come first - the transliteration is routinely the one at
+ * the front. Words carrying no letters at all, like a stray dash, belong to
+ * neither side and are trimmed along with whichever run they sit in. A title
+ * written entirely in one script is never touched.
+ */
+function dropForeignRun(title: string): string {
+  const words = title.split(/\s+/).filter(Boolean);
+  if (words.length < 2) return title;
+
+  /** true = non-Latin, false = Latin, null = no letters to judge by. */
+  const scriptOf = (word: string): boolean | null => {
+    if (!/\p{L}/u.test(word)) return null;
+    return NON_LATIN.test(word);
+  };
+
+  const scripts = words.map(scriptOf);
+  const nonLatin = scripts.filter((s) => s === true).length;
+  const latin = scripts.filter((s) => s === false).length;
+  if (nonLatin === 0 || latin === 0) return title;
+
+  // The majority script is the song's; the minority is the restatement.
+  const keep = nonLatin >= latin;
+
+  let start = 0;
+  let end = words.length;
+  while (start < end && scripts[start] !== keep) start++;
+  while (end > start && scripts[end - 1] !== keep) end--;
+
+  const kept = words.slice(start, end).join(" ");
+  return kept.length > 0 ? kept : title;
+}
 
 /**
  * Drops a translated restatement of the title after a pipe.
@@ -145,15 +226,28 @@ export function normalizeVideoTitle(
   channelName: string | null = null,
 ): NormalizedTitle {
   const channel = cleanChannelName(channelName);
-  const cleaned = collapse(rawTitle.replace(NOISE_IN_BRACKETS, " ").replace(NOISE_SUFFIX, ""));
+  const cleaned = collapse(
+    rawTitle
+      .replace(NOISE_IN_BRACKETS, " ")
+      .replace(NOISE_SUFFIX, "")
+      .replace(NOISE_SUFFIX_HE, ""),
+  );
+
+  /*
+   * The title is scrubbed against the credit we settled on, in this order:
+   * drop a translated restatement after a pipe, then the artist's own name
+   * echoed at either end, then a transliterated tail. Each step can only
+   * shorten the title, and each refuses to empty it.
+   */
+  const finish = (title: string, artists: readonly string[]): NormalizedTitle => ({
+    title: dropForeignRun(dropArtistEcho(dropBilingualTail(title), artists)),
+    artists,
+  });
 
   const parts = splitOnSeparator(cleaned);
   if (!parts) {
     // No separator: the whole string is the song, the channel is the artist.
-    return {
-      title: dropBilingualTail(cleaned || collapse(rawTitle)),
-      artists: channel ? [channel] : [],
-    };
+    return finish(cleaned || collapse(rawTitle), channel ? [channel] : []);
   }
 
   const [left, right] = parts;
@@ -161,14 +255,14 @@ export function normalizeVideoTitle(
   // The channel tells us which half is the artist. Uploaders use both orders,
   // so matching beats assuming.
   if (channel && looselyEqual(channel, right) && !looselyEqual(channel, left)) {
-    return { title: dropBilingualTail(left), artists: splitArtistCredit(right) };
+    return finish(left, splitArtistCredit(right));
   }
   if (channel && looselyEqual(channel, left)) {
-    return { title: dropBilingualTail(right), artists: splitArtistCredit(left) };
+    return finish(right, splitArtistCredit(left));
   }
 
   // Unknown channel: "Artist - Title" is overwhelmingly the convention.
-  return { title: dropBilingualTail(right), artists: splitArtistCredit(left) };
+  return finish(right, splitArtistCredit(left));
 }
 
 /** Parses YouTube's "3:08" / "1:02:33" duration badges into milliseconds. */
