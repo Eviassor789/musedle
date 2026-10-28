@@ -92,7 +92,7 @@ export function PlayerDeck({
               <rect x="14" y="5" width="4" height="14" rx="1.2" />
             </svg>
           ) : (
-            <svg viewBox="0 0 24 24" aria-hidden className="ml-0.5 size-5 fill-current">
+            <svg viewBox="0 0 24 24" aria-hidden className="size-5 fill-current">
               <path d="M8 5.14v13.72a1 1 0 0 0 1.53.85l10.4-6.86a1 1 0 0 0 0-1.7L9.53 4.29A1 1 0 0 0 8 5.14Z" />
             </svg>
           )}

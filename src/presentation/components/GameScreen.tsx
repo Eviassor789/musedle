@@ -188,7 +188,7 @@ export function GameScreen({
       // Drives the accent colour for everything inside: a Spotify game is
       // green, a YouTube game red, a pasted list cyan.
       data-source={playlist.provider}
-      className="theme-transition flex w-full max-w-2xl flex-col gap-5"
+      className="theme-transition flex w-full max-w-2xl flex-col gap-5 min-h-[120dvh] pb-80 sm:min-h-0 sm:pb-0"
     >
       <PlaylistHeader
         playlist={playlist}

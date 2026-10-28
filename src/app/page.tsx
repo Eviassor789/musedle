@@ -75,7 +75,9 @@ export default function HomePage() {
   return (
     <main
       data-source={screen.name === "game" ? screen.playlist.provider : "text"}
-      className="theme-transition relative flex min-h-dvh flex-col items-center justify-center px-5 py-12"
+      className={`theme-transition relative flex min-h-dvh flex-col items-center px-5 py-6 sm:py-12 ${
+        screen.name === "game" ? "justify-start sm:justify-center" : "justify-center"
+      }`}
     >
       <Backdrop artworkUrl={screen.name === "game" ? screen.playlist.artworkUrl : null} />
 
